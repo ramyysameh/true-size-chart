@@ -75,6 +75,7 @@ export const STRINGS = {
   editDetails: 'Edit details',
   clearData: 'Clear my data',
   howToMeasure: 'How to measure',
+  inches: 'in',
   emptyCell: '—',
   basisFlat: 'Garment measured flat',
   basisCirc: 'Garment measurements',
