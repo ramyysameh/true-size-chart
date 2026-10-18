@@ -29,11 +29,14 @@ function area(dim: Dim, delta: number): AreaFit {
 /** Error per size against the target; dimensions missing from the chart or target are skipped and weights renormalized. */
 export function scoreSizes(chart: NormalizedChart, target: Partial<Record<Dim, number>>): SizeScore[] {
   const weights = Object.entries(weightsFor(chart)) as [Dim, number][];
+  const primary = primaryDim(chart);
+  // Once any size can be judged on the primary girth, a size without it cannot win on secondary dimensions alone.
+  const primaryRequired = target[primary] !== undefined && (chart.measurements[primary] ?? []).some((v) => v != null);
 
   return chart.sizes.map((size, i) => {
     const usable = weights.filter(([dim]) => target[dim] !== undefined && chart.measurements[dim]?.[i] != null);
     const total = usable.reduce((s, [, w]) => s + w, 0);
-    if (total === 0) return { size, error: Infinity, areas: [] };
+    if (total === 0 || (primaryRequired && chart.measurements[primary]?.[i] == null)) return { size, error: Infinity, areas: [] };
 
     let error = 0;
     const areas = usable.map(([dim, w]) => {
@@ -57,9 +60,10 @@ export function selectSize(chart: NormalizedChart, scores: SizeScore[], fit: Fit
   if (!best) throw new ChartError('Chart has no measurements usable for this category');
 
   const primary = best.s.areas.find((a) => a.dim === primaryDim(chart));
+  const usableIndexes = order.map(({ i }) => i);
   let outOfRange: Recommendation['outOfRange'] = null;
-  if (primary && best.i === scores.length - 1 && primary.delta < TIGHT_PENALTY_FROM) outOfRange = 'above';
-  if (primary && best.i === 0 && primary.delta > POSITION_SCALE) outOfRange = 'below';
+  if (primary && best.i === Math.max(...usableIndexes) && primary.delta < TIGHT_PENALTY_FROM) outOfRange = 'above';
+  if (primary && best.i === Math.min(...usableIndexes) && primary.delta > POSITION_SCALE) outOfRange = 'below';
 
   const fitMatch = Math.max(55, Math.min(98, Math.round(100 - 350 * best.s.error)));
   const band = outOfRange ? 'between' : fitMatch >= 85 ? 'confident' : fitMatch >= 70 ? 'good' : 'between';

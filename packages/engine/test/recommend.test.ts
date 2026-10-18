@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { recommend } from '../src/recommend';
 import { targetFor } from '../src/ease';
-import type { ChartInput, ShopperProfile } from '../src/types';
+import { ProfileError, type ChartInput, type ShopperProfile } from '../src/types';
 import type { BodyEstimate } from '../src/body';
 
 const profile: ShopperProfile = {
@@ -50,6 +50,21 @@ describe('targetFor', () => {
     expect(pants.chest).toBeUndefined();
     const shorts = targetFor(body, { ...cmCirc, basis: 'garment', category: 'shorts', measurements: {} }, 'regular');
     expect(shorts.inseam).toBeUndefined();
+  });
+});
+
+describe('recommend input validation', () => {
+  const bad = (patch: Record<string, unknown>) => ({ ...profile, ...patch }) as unknown as ShopperProfile;
+
+  it.each([
+    ['an unknown fit preference', { fitPref: 'baggy' }],
+    ['an unknown sex', { sex: 'x' }],
+    ['a non-numeric height', { heightCm: Number.NaN }],
+    ['a height outside 120-230 cm', { heightCm: 20 }],
+    ['a weight outside 30-250 kg', { weightKg: 0 }],
+    ['an invalid shape step', { shape: { chest: 2, stomach: 0, hips: 0 } }],
+  ])('throws ProfileError for %s', (_, patch) => {
+    expect(() => recommend(bad(patch), cmCirc)).toThrow(ProfileError);
   });
 });
 

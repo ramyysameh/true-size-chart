@@ -58,9 +58,21 @@ export interface Recommendation {
   outOfRange: null | 'below' | 'above';
 }
 
+export const CATEGORIES: readonly Category[] = ['tshirt', 'shirt', 'hoodie', 'jacket', 'dress', 'pants', 'shorts', 'skirt'];
+export const DIMS: readonly Dim[] = ['chest', 'waist', 'hip', 'length', 'inseam'];
+
+/** The chart is unusable (merchant data); the storefront should hide the finder. */
 export class ChartError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ChartError';
+  }
+}
+
+/** The shopper's answers are out of range or malformed. */
+export class ProfileError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProfileError';
   }
 }

@@ -1,6 +1,7 @@
 import { estimateBody } from './body';
 import { normalizeChart } from './chart';
 import { targetFor } from './ease';
+import { validateProfile } from './profile';
 import { scoreSizes, selectSize } from './score';
 import type { ChartInput, Recommendation, ShopperProfile } from './types';
 
@@ -9,6 +10,7 @@ import type { ChartInput, Recommendation, ShopperProfile } from './types';
  * category's standard chart; comparing against it produces the fit note.
  */
 export function recommend(profile: ShopperProfile, chart: ChartInput, opts: { reference?: ChartInput } = {}): Recommendation {
+  validateProfile(profile);
   const normalized = normalizeChart(chart);
   const target = targetFor(estimateBody(profile), normalized, profile.fitPref);
   const selected = selectSize(normalized, scoreSizes(normalized, target), profile.fitPref);

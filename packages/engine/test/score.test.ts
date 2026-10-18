@@ -53,6 +53,32 @@ describe('scoreSizes + selectSize', () => {
     expect(Number.isNaN(r.fitMatch)).toBe(false);
   });
 
+  it('never lets a size missing the primary dimension win on length alone', () => {
+    const blankS: NormalizedChart = { ...tops, measurements: { chest: [null, 104, 112, 120], length: [70, 72, 74, 76] } };
+    const scores = scoreSizes(blankS, { chest: 120, length: 70 });
+    expect(scores[0]!.error).toBe(Infinity);
+    expect(selectSize(blankS, scores, 'regular').size).toBe('XL');
+  });
+
+  it('still scores a chart that has no primary dimension at all', () => {
+    const lengthOnly: NormalizedChart = { ...tops, measurements: { length: [70, 72, 74, 76] } };
+    expect(selectSize(lengthOnly, scoreSizes(lengthOnly, { chest: 100, length: 74 }), 'regular').size).toBe('L');
+  });
+
+  it('flags above-range against the largest usable size when the top size is blank', () => {
+    const blankTop: NormalizedChart = { ...tops, measurements: { chest: [96, 104, 112, null], length: [70, 72, 74, 76] } };
+    const r = selectSize(blankTop, scoreSizes(blankTop, { chest: 112 * 1.08, length: 74 }), 'regular');
+    expect(r.size).toBe('L');
+    expect(r.outOfRange).toBe('above');
+  });
+
+  it('flags below-range against the smallest usable size when the first size is blank', () => {
+    const blankFirst: NormalizedChart = { ...tops, measurements: { chest: [null, 104, 112, 120], length: [70, 72, 74, 76] } };
+    const r = selectSize(blankFirst, scoreSizes(blankFirst, { chest: 104 / 1.15, length: 72 }), 'regular');
+    expect(r.size).toBe('M');
+    expect(r.outOfRange).toBe('below');
+  });
+
   it('handles a one-size chart', () => {
     const one: NormalizedChart = { ...tops, sizes: ['OS'], measurements: { chest: [110] } };
     const r = selectSize(one, scoreSizes(one, { chest: 104 }), 'regular');

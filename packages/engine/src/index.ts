@@ -6,3 +6,4 @@ export * from './ease';
 export * from './score';
 export * from './recommend';
 export * from './templates/tshirt';
+export * from './profile';

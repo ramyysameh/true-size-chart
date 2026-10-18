@@ -34,6 +34,29 @@ describe('normalizeChart', () => {
     expect(() => normalizeChart({ ...base, sizes: [], measurements: {} })).toThrow(ChartError);
   });
 
+  const bad = (patch: Record<string, unknown>) => ({ ...base, ...patch }) as unknown as ChartInput;
+
+  it.each([
+    ['an unknown unit', { unit: 'IN' }],
+    ['an unknown basis', { basis: 'flat' }],
+    ['an unknown category', { category: 'Tshirt' }],
+    ['an unknown intended fit', { intendedFit: 'boxy' }],
+    ['missing measurements', { measurements: undefined }],
+    ['missing sizes', { sizes: undefined }],
+    ['an empty-string cell', { measurements: { chest: [''], length: [28] } }],
+    ['a text cell', { measurements: { chest: ['abc'], length: [28] } }],
+    ['a zero cell', { measurements: { chest: [0], length: [28] } }],
+    ['a negative cell', { measurements: { chest: [-20], length: [28] } }],
+    ['a non-finite cell', { measurements: { chest: [Infinity], length: [28] } }],
+  ])('throws ChartError for %s', (_, patch) => {
+    expect(() => normalizeChart(bad(patch))).toThrow(ChartError);
+  });
+
+  it('ignores measurement columns the engine does not score', () => {
+    const n = normalizeChart(bad({ measurements: { chest: [20], sleeve: [9] } }));
+    expect(Object.keys(n.measurements)).toEqual(['chest']);
+  });
+
   it('throws ChartError when a measurement row length differs from sizes', () => {
     expect(() => normalizeChart({ ...base, sizes: ['S', 'M'], measurements: { chest: [20] } })).toThrow(ChartError);
   });
