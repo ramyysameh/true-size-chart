@@ -6,6 +6,8 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
     "skipLibCheck": true,
     "lib": ["ES2020"]
   },
