@@ -33,6 +33,69 @@ required = true
 name = "Description"
 type = "multi_line_text_field"
 
+# A size chart a merchant builds once and assigns to many products.
+# `table` holds the engine's ChartTable JSON: { sizes: string[], measurements: { chest?: (number|null)[], ... } }.
+[metaobjects.app.size_chart]
+name = "Size chart"
+description = "A True: Size Chart size chart"
+display_name_field = "name"
+
+  [metaobjects.app.size_chart.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.size_chart.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.size_chart.fields.category]
+name = "Category"
+description = "tshirt, shirt, hoodie, jacket, dress, pants, shorts or skirt"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.size_chart.fields.audience]
+name = "Audience"
+description = "women, men or unisex"
+type = "single_line_text_field"
+
+[metaobjects.app.size_chart.fields.unit]
+name = "Unit"
+description = "cm or in"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.size_chart.fields.basis]
+name = "Measured as"
+description = "garment_flat, garment_circ or body"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.size_chart.fields.intended_fit]
+name = "Intended fit"
+description = "slim, regular or oversized"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.size_chart.fields.table]
+name = "Measurements"
+type = "json"
+required = true
+
+[metaobjects.app.size_chart.fields.how_to_measure]
+name = "How to measure"
+type = "multi_line_text_field"
+
+# Written by the app from assignment rules so the storefront reads the chart with Liquid alone.
+[product.metafields.app.size_chart]
+type = "metaobject_reference<$app:size_chart>"
+name = "Size chart"
+description = "The True: Size Chart chart shown on this product"
+
+  [product.metafields.app.size_chart.access]
+  admin = "merchant_read_write"
+
 [webhooks]
 api_version = "2027-01"
 

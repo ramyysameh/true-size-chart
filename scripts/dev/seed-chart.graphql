@@ -1,0 +1,27 @@
+mutation SeedSizeChart($table: String!) {
+  metaobjectUpsert(
+    handle: { type: "$app:size_chart", handle: "dev-tshirt-unisex" }
+    metaobject: {
+      fields: [
+        { key: "name", value: "Dev T-shirt (unisex)" }
+        { key: "category", value: "tshirt" }
+        { key: "audience", value: "unisex" }
+        { key: "unit", value: "cm" }
+        { key: "basis", value: "garment_flat" }
+        { key: "intended_fit", value: "regular" }
+        { key: "table", value: $table }
+        { key: "how_to_measure", value: "Lay the shirt flat. Chest: armpit to armpit. Length: highest shoulder point to hem." }
+      ]
+    }
+  ) {
+    metaobject {
+      id
+      handle
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}

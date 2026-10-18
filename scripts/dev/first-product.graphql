@@ -1,0 +1,9 @@
+query FirstProduct {
+  products(first: 1, sortKey: TITLE) {
+    nodes {
+      id
+      title
+      handle
+    }
+  }
+}

@@ -1,0 +1,14 @@
+mutation LinkSizeChart($productId: ID!, $chartId: String!) {
+  metafieldsSet(metafields: [{ ownerId: $productId, key: "size_chart", type: "metaobject_reference", value: $chartId }]) {
+    metafields {
+      key
+      namespace
+      value
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}
