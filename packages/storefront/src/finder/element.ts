@@ -1,4 +1,4 @@
-import { normalizeChart } from '@true-size-chart/engine';
+import { ChartError, normalizeChart } from '@true-size-chart/engine';
 import { readConfig, toChartInput, type FinderConfig } from '../config';
 import { defaultDraft, type Draft } from '../model';
 import { loadProfile } from '../profile-store';
@@ -68,11 +68,15 @@ export class TrueSizeFinder extends HTMLElement {
 
     const stored = loadProfile();
     this.lastFinder = stored ? 'result' : 'body';
+    const trigger = opts.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // Render before locking anything, so a throwing screen leaves the page as it was and a later open() retries.
+    this.go(opts.tab === 'chart' ? 'chart' : this.lastFinder);
     this.isOpen = true;
-    this.trigger = opts.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    this.trigger = trigger;
     this.prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = 'hidden';
-    this.go(opts.tab === 'chart' ? 'chart' : this.lastFinder);
+    // On the document, not the shadow root: a click on plain text drops focus to <body>, and Escape and Tab must still work.
+    document.addEventListener('keydown', this.onKey);
 
     await this.ready;
     if (!this.isOpen) return;
@@ -84,6 +88,7 @@ export class TrueSizeFinder extends HTMLElement {
     if (!this.isOpen) return;
     this.isOpen = false;
     this.ui!.root.hidden = true;
+    document.removeEventListener('keydown', this.onKey);
     // documentElement is null while a document is being torn down.
     const html = document.documentElement as HTMLElement | null;
     if (html) html.style.overflow = this.prevOverflow;
@@ -100,27 +105,31 @@ export class TrueSizeFinder extends HTMLElement {
   private setup(): boolean {
     const config = readConfig(document);
     if (!config) return this.disable('no #tsc-config on the page');
+    this.finderOk = true;
     try {
       normalizeChart(toChartInput(config.chart));
-    } catch {
-      // ChartError (or a config too malformed to reach the engine): the size chart tab only.
+    } catch (error) {
+      if (!(error instanceof ChartError)) throw error;
+      // The engine cannot use this chart: the size chart tab only.
       this.finderOk = false;
-      if (!config.chart?.table?.sizes?.length) return this.disable('the size chart has no sizes');
+      if (!config.chart.table.sizes?.length) return this.disable('the size chart has no sizes');
     }
 
     const strings: Strings = { ...STRINGS, ...config.strings };
-    this.ctx = {
+    const ctx: FinderContext = {
       config,
       strings,
       draft: defaultDraft(config, loadProfile()),
       setDraft: (patch) => {
-        this.ctx!.draft = { ...this.ctx!.draft, ...patch };
+        ctx.draft = { ...ctx.draft, ...patch };
       },
       go: (screen) => this.go(screen),
       close: () => this.close(),
     };
     applyTheme(this, config.settings);
     this.ui = this.build(config, strings);
+    // Last, so a build that throws is retried on the next open().
+    this.ctx = ctx;
     return true;
   }
 
@@ -134,7 +143,8 @@ export class TrueSizeFinder extends HTMLElement {
   }
 
   private build(config: FinderConfig, s: Strings): Ui {
-    const shadow = this.attachShadow({ mode: 'open' });
+    const shadow = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
+    shadow.textContent = '';
     const link = h('link', { rel: 'stylesheet', href: config.assets.css });
     // A stylesheet that fails to load must never block the finder.
     this.ready = new Promise((resolve) => {
@@ -158,7 +168,8 @@ export class TrueSizeFinder extends HTMLElement {
 
     const panel = h(
       'div',
-      { class: 'tsc-panel', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tsc-title' },
+      // tabindex -1: a click on non-focusable content keeps focus in the dialog.
+      { class: 'tsc-panel', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tsc-title', tabindex: '-1' },
       h(
         'div',
         { class: 'tsc-head' },
@@ -178,7 +189,7 @@ export class TrueSizeFinder extends HTMLElement {
     );
     const root = h(
       'div',
-      { class: 'tsc-root', hidden: true, onkeydown: (e: KeyboardEvent) => this.onKey(e) },
+      { class: 'tsc-root', hidden: true },
       h('div', { class: 'tsc-backdrop', onclick: () => this.close() }),
       panel,
     );
@@ -232,7 +243,7 @@ export class TrueSizeFinder extends HTMLElement {
     return [...within.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest('[hidden]'));
   }
 
-  private onKey(e: KeyboardEvent): void {
+  private readonly onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       e.preventDefault();
       this.close();
@@ -249,7 +260,7 @@ export class TrueSizeFinder extends HTMLElement {
       e.preventDefault();
       (e.shiftKey ? last : first).focus();
     }
-  }
+  };
 
   /** Arrow keys move between the tabs (automatic activation). */
   private onTabKey(e: KeyboardEvent): void {

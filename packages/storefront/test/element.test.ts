@@ -100,6 +100,49 @@ describe('<true-size-finder>', () => {
     expect(el.shadowRoot!.activeElement).toBe(last);
   });
 
+  it('keeps Escape and the focus trap working after a click drops focus to the page', async () => {
+    const { el, trigger } = setup();
+    await open(el, { trigger });
+    expect(dialog(el)!.getAttribute('tabindex')).toBe('-1');
+
+    (el.shadowRoot!.activeElement as HTMLElement).blur();
+    key(document.body, 'Tab');
+    expect(el.shadowRoot!.activeElement).toBe(focusables(el)[0]);
+
+    (el.shadowRoot!.activeElement as HTMLElement).blur();
+    key(document.body, 'Escape');
+    expect(shown(el)).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('stops listening on the page once closed', async () => {
+    const { el, trigger } = setup();
+    await open(el, { trigger });
+    el.close();
+    const other = document.body.appendChild(document.createElement('button'));
+    other.focus();
+    key(other, 'Tab');
+    expect(document.activeElement).toBe(other);
+  });
+
+  it('never leaves the page scroll-locked when the first render throws, and retries', async () => {
+    const config = { ...BASE, chart: { ...BASE.chart, table: { sizes: ['S'] } } } as unknown as FinderConfig;
+    const { el } = setup(config);
+    await expect(el.open()).rejects.toThrow();
+    expect(document.documentElement.style.overflow).toBe('');
+    expect(shown(el)).toBe(false);
+    await expect(el.open()).rejects.toThrow();
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('rethrows a config error that is not a ChartError', async () => {
+    const config = { ...BASE, chart: undefined } as unknown as FinderConfig;
+    const { el, trigger } = setup(config);
+    await expect(el.open()).rejects.toThrow(TypeError);
+    expect(trigger.hidden).toBe(false);
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
   it('renders the chrome: header, close, product card, tabs, progress and footer', async () => {
     const { el } = setup();
     await open(el);
