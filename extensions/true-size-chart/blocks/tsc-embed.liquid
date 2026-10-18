@@ -67,8 +67,8 @@
       }
     {%- endcapture -%}
 
-    {%- comment -%} Merchant text could contain "</script>"; < is the same character inside a JSON string. {%- endcomment -%}
-    <script type="application/json" id="tsc-config">{{ config | replace: '<', '<' }}</script>
+    {%- comment -%} Merchant text could contain a closing script tag. The replacement is the six literal characters backslash, u, 0, 0, 3, c: a valid JSON escape for the less-than sign. {%- endcomment -%}
+    <script type="application/json" id="tsc-config">{{ config | replace: '<', '\u003c' }}</script>
     {% render 'tsc-loader' %}
   {%- endif -%}
 {%- endif -%}
