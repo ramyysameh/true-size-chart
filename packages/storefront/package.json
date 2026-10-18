@@ -1,0 +1,21 @@
+{
+  "name": "@true-size-chart/storefront",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "size": "node scripts/size-budget.mjs"
+  },
+  "dependencies": {
+    "@true-size-chart/engine": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.24.2",
+    "happy-dom": "^15.11.7",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

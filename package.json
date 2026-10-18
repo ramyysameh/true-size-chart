@@ -18,7 +18,9 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test:engine": "npm test -w @true-size-chart/engine"
+    "test:engine": "npm test -w @true-size-chart/engine",
+    "test:storefront": "npm test -w @true-size-chart/storefront",
+    "build:storefront": "npm run build -w @true-size-chart/storefront"
   },
   "type": "module",
   "engines": {
