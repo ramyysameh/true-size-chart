@@ -1,22 +1,75 @@
 {%- comment -%}
-  True: Size Chart app embed. Renders the product's size chart as inline JSON for the finder.
-  Outputs nothing on non-product pages or when the product has no chart.
+  True: Size Chart app embed. Outputs the finder's config as inline JSON (FinderConfig in packages/storefront/src/config.ts)
+  and the inline loader. Renders nothing on non-product pages or when the product has no size chart.
+  Chart access path: docs/decisions/0001-liquid-chart-access.md
 {%- endcomment -%}
 {%- if template.name == 'product' -%}
   {%- assign chart = product.metafields['$app'].size_chart.value -%}
   {%- if chart -%}
-    <script type="application/json" id="tsc-config">
+    {%- assign selected_variant = product.selected_or_first_available_variant -%}
+
+    {%- comment -%} First option named like one of the comma-separated "size option names" gives the size index. {%- endcomment -%}
+    {%- assign size_names = block.settings.size_option_names | downcase | split: ',' -%}
+    {%- assign size_index = nil -%}
+    {%- for option in product.options_with_values -%}
+      {%- assign option_name = option.name | downcase | strip -%}
+      {%- for size_name in size_names -%}
+        {%- assign wanted_name = size_name | strip -%}
+        {%- if size_index == nil and wanted_name == option_name -%}
+          {%- assign size_index = option.position | minus: 1 -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endfor -%}
+
+    {%- assign header = block.settings.header | strip -%}
+    {%- assign privacy = block.settings.privacy | strip -%}
+    {%- assign disclaimer = block.settings.disclaimer | strip -%}
+    {%- assign accent = block.settings.accent | default: '#111111' | color_to_hex -%}
+
+    {%- capture config -%}
       {
         "chart": {
+          "key": {{ chart.system.handle | json }},
           "name": {{ chart.name.value | json }},
           "category": {{ chart.category.value | json }},
           "unit": {{ chart.unit.value | json }},
           "basis": {{ chart.basis.value | json }},
           "intendedFit": {{ chart.intended_fit.value | json }},
-          "table": {{ chart.table.value | json }}
+          "audience": {{ chart.audience.value | json }},
+          "table": {{ chart.table.value | json }},
+          "howToMeasure": {{ chart.how_to_measure.value | json }}
+        },
+        "product": {
+          "title": {{ product.title | json }},
+          "image": {% if product.featured_image %}{{ product.featured_image | image_url: width: 160 | json }}{% else %}null{% endif %},
+          "price": {{ selected_variant.price | money | json }}
+        },
+        "variants": [
+          {%- for variant in product.variants -%}
+            { "id": {{ variant.id }}, "available": {{ variant.available }}, "options": {{ variant.options | json }} }{% unless forloop.last %},{% endunless %}
+          {%- endfor -%}
+        ],
+        "sizeOptionIndex": {{ size_index | json }},
+        "selectedVariantId": {{ selected_variant.id }},
+        "routes": { "cartAdd": {{ routes.cart_add_url | json }}, "cart": {{ routes.cart_url | json }} },
+        "assets": { "js": {{ 'tsc-finder.js' | asset_url | json }}, "css": {{ 'tsc-finder.css' | asset_url | json }} },
+        "settings": {
+          "font": {{ block.settings.font | json }},
+          "accent": {{ accent | json }},
+          "radius": {{ block.settings.radius | default: 0 }}
+        },
+        "strings": {
+          {%- assign separator = '' -%}
+          {%- if header != blank -%}{{ separator }}"header": {{ header | json }}{%- assign separator = ',' -%}{%- endif -%}
+          {%- if privacy != blank -%}{{ separator }}"privacy": {{ privacy | json }}{%- assign separator = ',' -%}{%- endif -%}
+          {%- if disclaimer != blank -%}{{ separator }}"disclaimer": {{ disclaimer | json }}{%- assign separator = ',' -%}{%- endif -%}
         }
       }
-    </script>
+    {%- endcapture -%}
+
+    {%- comment -%} Merchant text could contain "</script>"; < is the same character inside a JSON string. {%- endcomment -%}
+    <script type="application/json" id="tsc-config">{{ config | replace: '<', '<' }}</script>
+    {% render 'tsc-loader' %}
   {%- endif -%}
 {%- endif -%}
 
@@ -24,6 +77,62 @@
 {
   "name": "True: Size Chart",
   "target": "body",
-  "settings": []
+  "settings": [
+    {
+      "type": "text",
+      "id": "size_option_names",
+      "label": "Size option names",
+      "info": "Comma-separated product option names that hold the size, for example Size, Taille.",
+      "default": "Size"
+    },
+    {
+      "type": "select",
+      "id": "font",
+      "label": "Font",
+      "options": [
+        { "value": "theme", "label": "Theme font" },
+        { "value": "editorial", "label": "Editorial" }
+      ],
+      "default": "editorial"
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent color",
+      "default": "#111111"
+    },
+    {
+      "type": "range",
+      "id": "radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 16,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "header",
+      "content": "Text overrides"
+    },
+    {
+      "type": "text",
+      "id": "header",
+      "label": "Heading",
+      "info": "Leave blank for the default."
+    },
+    {
+      "type": "text",
+      "id": "privacy",
+      "label": "Privacy note",
+      "info": "Leave blank for the default."
+    },
+    {
+      "type": "text",
+      "id": "disclaimer",
+      "label": "Disclaimer",
+      "info": "Leave blank for the default."
+    }
+  ]
 }
 {% endschema %}

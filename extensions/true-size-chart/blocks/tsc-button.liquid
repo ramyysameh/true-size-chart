@@ -1,0 +1,64 @@
+{%- comment -%}
+  True: Size Chart app block: the "Find my size" opener on a product page.
+  Renders only for products with a size chart. The button stays hidden (data-tsc-pending) until the
+  app embed's loader runs, so the block does nothing when the embed is off. The loader snippet is
+  rendered by the embed, never here.
+{%- endcomment -%}
+{%- if product.metafields['$app'].size_chart.value -%}
+  {%- assign link_style = false -%}
+  {%- if block.settings.style == 'link' -%}{%- assign link_style = true -%}{%- endif -%}
+  <style>[data-tsc-pending]{visibility:hidden}.tsc-b,.tsc-l{font:inherit;color:inherit;cursor:pointer}{%- if link_style or block.settings.show_chart_link -%}.tsc-l{background:none;border:0;padding:0;text-decoration:underline}{%- endif -%}{%- unless link_style -%}.tsc-b{background:none;border:1px solid;border-radius:0;padding:12px 16px;width:100%}{%- endunless -%}</style>
+  <div class="tsc-block" {{ block.shopify_attributes }}>
+    <button type="button" class="{% if link_style %}tsc-l{% else %}tsc-b{% endif %}" data-tsc-open data-tsc-pending data-tsc-default="{{ block.settings.label | escape }}" data-tsc-remembered="{{ block.settings.remembered_label | escape }}"><span data-tsc-label>{{ block.settings.label | escape }}</span></button>
+    {%- if block.settings.show_chart_link %}
+    <button type="button" class="tsc-l" data-tsc-open="chart" data-tsc-pending>{{ block.settings.chart_link_label | escape }}</button>
+    {%- endif %}
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:blocks.find_my_size.name",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "label",
+      "label": "Button label",
+      "default": "Find my size"
+    },
+    {
+      "type": "text",
+      "id": "remembered_label",
+      "label": "Label once a size is remembered",
+      "info": "{size} is replaced with the shopper's size.",
+      "default": "Your size: {size}"
+    },
+    {
+      "type": "select",
+      "id": "style",
+      "label": "Style",
+      "options": [
+        { "value": "button", "label": "Button" },
+        { "value": "link", "label": "Link" }
+      ],
+      "default": "button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_chart_link",
+      "label": "Show size chart link",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "chart_link_label",
+      "label": "Size chart link label",
+      "default": "Size chart"
+    }
+  ]
+}
+{% endschema %}

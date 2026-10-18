@@ -117,6 +117,10 @@ Using pnpm:
 pnpm run build
 ```
 
+### Storefront finder
+
+The shopper-facing size finder lives in `packages/storefront` and ships through the theme app extension in `extensions/true-size-chart`. `npm run build:storefront` bundles it into `assets/tsc-finder.js`, `assets/tsc-finder.css` and `snippets/tsc-loader.liquid` (the generated files are committed; `npm run dev` and `npm run deploy` rebuild them first), and `npm run test:storefront` runs its tests. To preview it, run `npm run dev`, open the theme editor with App embeds on (`/admin/themes/current/editor?context=apps`), switch on **True: Size Chart**, and add the **Find my size** app block to the product template. Both are needed: the embed outputs the finder config and loader, the block renders the button. Check the Liquid with `shopify theme check --path extensions/true-size-chart`.
+
 ## Hosting
 
 When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/launch/deployment) to host it externally. From there, you have a few options:
