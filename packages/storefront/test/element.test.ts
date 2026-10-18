@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FinderConfig } from '../src/config';
-import type { TrueSizeFinder } from '../src/finder/element';
+import { TrueSizeFinder } from '../src/finder/element';
 import { h } from '../src/finder/dom';
 import '../src/index';
 import { PROFILE_KEY } from '../src/profile-store';
@@ -183,9 +183,16 @@ describe('<true-size-finder>', () => {
   });
 
   it('renders an empty panel body for a screen with no renderer', async () => {
-    const { el } = setup();
-    await open(el);
-    expect($(el, '[role="tabpanel"]')!.childElementCount).toBe(0);
+    const screens = TrueSizeFinder.defaultScreens;
+    const body = screens.get('body')!;
+    screens.delete('body');
+    try {
+      const { el } = setup();
+      await open(el);
+      expect($(el, '[role="tabpanel"]')!.childElementCount).toBe(0);
+    } finally {
+      screens.set('body', body);
+    }
   });
 
   it('opens a stored profile on result', async () => {
