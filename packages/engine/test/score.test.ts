@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scoreSizes, selectSize } from '../src/score';
+import { fitMatchFromError, scoreSizes, selectSize } from '../src/score';
 import type { NormalizedChart } from '../src/types';
 
 const tops: NormalizedChart = {
@@ -114,5 +114,18 @@ describe('scoreSizes + selectSize', () => {
     expect(byDim.waist!.label).toBe('ideal');
     expect(byDim.length!.label).toBe('roomy');
     expect(byDim.length!.position).toBe(1);
+  });
+});
+
+describe('fitMatchFromError', () => {
+  it('maps error to a clamped 55-98 percentage', () => {
+    expect(fitMatchFromError(0)).toBe(98);
+    expect(fitMatchFromError(0.1)).toBe(65);
+    expect(fitMatchFromError(1)).toBe(55);
+  });
+
+  it('returns null when the error is not finite', () => {
+    expect(fitMatchFromError(Infinity)).toBeNull();
+    expect(fitMatchFromError(NaN)).toBeNull();
   });
 });

@@ -49,6 +49,11 @@ export function scoreSizes(chart: NormalizedChart, target: Partial<Record<Dim, n
   });
 }
 
+/** Shopper-facing confidence (55-98) for a weighted error; null when the size could not be judged. */
+export function fitMatchFromError(error: number): number | null {
+  return Number.isFinite(error) ? Math.max(55, Math.min(98, Math.round(100 - 350 * error))) : null;
+}
+
 /** Picks the best size and turns its error into the shopper-facing confidence. */
 export function selectSize(chart: NormalizedChart, scores: SizeScore[], fit: FitPref): Omit<Recommendation, 'fitNote'> {
   const order = scores
@@ -65,7 +70,7 @@ export function selectSize(chart: NormalizedChart, scores: SizeScore[], fit: Fit
   if (primary && best.i === Math.max(...usableIndexes) && primary.delta < TIGHT_PENALTY_FROM) outOfRange = 'above';
   if (primary && best.i === Math.min(...usableIndexes) && primary.delta > POSITION_SCALE) outOfRange = 'below';
 
-  const fitMatch = Math.max(55, Math.min(98, Math.round(100 - 350 * best.s.error)));
+  const fitMatch = fitMatchFromError(best.s.error)!;
   const band = outOfRange ? 'between' : fitMatch >= 85 ? 'confident' : fitMatch >= 70 ? 'good' : 'between';
 
   return {

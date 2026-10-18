@@ -17,10 +17,14 @@ export function recommend(profile: ShopperProfile, chart: ChartInput, opts: { re
 
   let fitNote: Recommendation['fitNote'] = 'true_to_size';
   if (opts.reference) {
-    const usual = chart.sizes.indexOf(recommend(profile, opts.reference).size);
-    const here = chart.sizes.indexOf(selected.size);
-    if (usual >= 0 && here > usual) fitNote = 'runs_small';
-    if (usual >= 0 && here < usual) fitNote = 'runs_large';
+    try {
+      const usual = chart.sizes.indexOf(recommend(profile, opts.reference).size);
+      const here = chart.sizes.indexOf(selected.size);
+      if (usual >= 0 && here > usual) fitNote = 'runs_small';
+      if (usual >= 0 && here < usual) fitNote = 'runs_large';
+    } catch {
+      // An unusable reference chart only costs the fit note; the recommendation stands.
+    }
   }
 
   return { ...selected, fitNote };

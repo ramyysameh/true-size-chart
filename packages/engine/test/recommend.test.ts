@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recommend } from '../src/recommend';
+import { TSHIRT_UNISEX } from '../src/templates/tshirt';
 import { targetFor } from '../src/ease';
 import { ProfileError, type ChartInput, type ShopperProfile } from '../src/types';
 import type { BodyEstimate } from '../src/body';
@@ -110,5 +111,23 @@ describe('recommend', () => {
     expect(recommend(profile, smallCut, { reference: cmCirc }).fitNote).toBe('runs_small');
     expect(recommend(profile, cmCirc, { reference: smallCut }).fitNote).toBe('runs_large');
     expect(recommend(profile, cmCirc).fitNote).toBe('true_to_size');
+  });
+});
+
+describe('reference chart handling', () => {
+  it('falls back to true_to_size when the reference chart is unusable', () => {
+    const rec = recommend(profile, TSHIRT_UNISEX, { reference: { ...TSHIRT_UNISEX, sizes: [] } });
+    expect(rec.fitNote).toBe('true_to_size');
+  });
+
+  it('still throws ProfileError for an invalid shopper profile', () => {
+    expect(() => recommend({ ...profile, heightCm: 500 }, TSHIRT_UNISEX, { reference: TSHIRT_UNISEX })).toThrow(ProfileError);
+  });
+
+  it('scores a size missing the only chart dimension as Infinity error', () => {
+    const chart: ChartInput = { ...cmCirc, measurements: { chest: [null, 104, 112, 120, 128] } };
+    const rec = recommend(profile, chart);
+    expect(rec.scores[0]!.size).toBe('S');
+    expect(rec.scores[0]!.error).toBe(Infinity);
   });
 });
