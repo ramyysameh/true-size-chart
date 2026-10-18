@@ -26,14 +26,14 @@ const body: BodyEstimate = { chest: 100, waist: 90, hip: 100, inseam: 80, height
 describe('targetFor', () => {
   it('adds regular tops ease to chest and derives length from height', () => {
     const t = targetFor(body, { ...cmCirc, basis: 'garment', measurements: {} }, 'regular');
-    expect(t.chest).toBeCloseTo(112, 9);
+    expect(t.chest).toBeCloseTo(108, 9);
     expect(t.waist).toBeCloseTo(104.4, 9);
     expect(t.length).toBeCloseTo(72, 9);
   });
 
   it('adds hoodie and oversized allowances', () => {
     const t = targetFor(body, { ...cmCirc, basis: 'garment', category: 'hoodie', intendedFit: 'oversized', measurements: {} }, 'slim');
-    expect(t.chest).toBeCloseTo(100 * (1 + 0.06 + 0.06 + 0.1), 9);
+    expect(t.chest).toBeCloseTo(100 * (1 + 0.04 + 0.06 + 0.1), 9);
   });
 
   it('uses no ease and no length for body-basis charts', () => {

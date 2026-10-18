@@ -5,3 +5,4 @@ export * from './body';
 export * from './ease';
 export * from './score';
 export * from './recommend';
+export * from './templates/tshirt';

@@ -10,9 +10,9 @@ export function groupOf(category: Category): Group {
 /** Extra room a garment has over the body, as a fraction of the body girth. */
 export const EASE: Record<Group, Record<FitPref, Partial<Record<Dim, number>>>> = {
   tops: {
-    slim: { chest: 0.06, waist: 0.08, hip: 0.08 },
-    regular: { chest: 0.12, waist: 0.16, hip: 0.16 },
-    relaxed: { chest: 0.2, waist: 0.26, hip: 0.26 },
+    slim: { chest: 0.04, waist: 0.08, hip: 0.08 },
+    regular: { chest: 0.08, waist: 0.16, hip: 0.16 },
+    relaxed: { chest: 0.15, waist: 0.26, hip: 0.26 },
   },
   bottoms: {
     slim: { waist: 0, hip: 0.04 },
