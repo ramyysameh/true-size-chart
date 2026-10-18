@@ -3,9 +3,11 @@
   "private": true,
   "scripts": {
     "build": "react-router build",
+    "predev": "npm run build:storefront",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
+    "predeploy": "npm run build:storefront",
     "deploy": "shopify app deploy",
     "config:use": "shopify app config use",
     "env": "shopify app env",
