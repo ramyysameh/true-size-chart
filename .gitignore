@@ -1,0 +1,5 @@
+node_modules/
+.superpowers/
+dist/
+packages/engine/data/
+.env
