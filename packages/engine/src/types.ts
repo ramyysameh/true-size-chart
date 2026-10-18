@@ -32,6 +32,32 @@ export interface ShopperProfile {
   fitPref: FitPref;
 }
 
+export interface AreaFit {
+  dim: Dim;
+  /** (garment − target) / target */
+  delta: number;
+  label: 'snug' | 'ideal' | 'roomy';
+  /** −1 (snug) … 0 (ideal) … 1 (roomy), for the fit dot */
+  position: number;
+}
+
+export interface SizeScore {
+  size: string;
+  error: number;
+  areas: AreaFit[];
+}
+
+export interface Recommendation {
+  size: string;
+  runnerUp: string | null;
+  fitMatch: number;
+  band: 'confident' | 'good' | 'between';
+  areas: AreaFit[];
+  scores: SizeScore[];
+  fitNote: 'true_to_size' | 'runs_small' | 'runs_large';
+  outOfRange: null | 'below' | 'above';
+}
+
 export class ChartError extends Error {
   constructor(message: string) {
     super(message);
