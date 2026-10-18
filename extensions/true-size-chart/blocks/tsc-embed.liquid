@@ -1,0 +1,29 @@
+{%- comment -%}
+  True: Size Chart app embed. Renders the product's size chart as inline JSON for the finder.
+  Outputs nothing on non-product pages or when the product has no chart.
+{%- endcomment -%}
+{%- if template.name == 'product' -%}
+  {%- assign chart = product.metafields['$app'].size_chart.value -%}
+  {%- if chart -%}
+    <script type="application/json" id="tsc-config">
+      {
+        "chart": {
+          "name": {{ chart.name.value | json }},
+          "category": {{ chart.category.value | json }},
+          "unit": {{ chart.unit.value | json }},
+          "basis": {{ chart.basis.value | json }},
+          "intendedFit": {{ chart.intended_fit.value | json }},
+          "table": {{ chart.table.value | json }}
+        }
+      }
+    </script>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "True: Size Chart",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
