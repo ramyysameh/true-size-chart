@@ -70,6 +70,8 @@ export const STRINGS = {
   viewBag: 'View bag',
   substituted: '{size} is sold out. {alt} is the next best fit in stock.',
   soldOut: 'Sold out in your size',
+  notOffered: "{size} isn't available for this product.",
+  notOfferedAlt: "{size} isn't available for this product. {alt} is the next best fit in stock.",
   addError: "Couldn't add to bag. Please try again.",
   noSizeOption: 'Choose {size} on the page to add it to your bag.',
   editDetails: 'Edit details',

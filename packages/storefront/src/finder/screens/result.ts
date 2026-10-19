@@ -6,7 +6,7 @@ import { defaultDraft, finalRecommendation, toProfile } from '../../model';
 import { clearProfile, saveProfile } from '../../profile-store';
 import { paintRemembered } from '../../remembered';
 import { fmt, type Strings } from '../../strings';
-import { currentVariantId, inStockPick } from '../../variants';
+import { currentVariantId, inStockPick, isOffered } from '../../variants';
 import { h } from '../dom';
 import type { FinderContext, ScreenRenderer } from '../element';
 import { svg } from '../icons';
@@ -99,9 +99,15 @@ export const renderResult: ScreenRenderer = (ctx) => {
     );
   };
 
+  // No size option, or one whose labels match none of the chart's sizes: the shopper picks on the page.
+  const sizeMatched = sizes.some((size) => isOffered(config, size));
+
   const paintCta = () => {
-    if (config.sizeOptionIndex === null) return ctaBox.replaceChildren(h('p', { class: 'tsc-mute' }, fmt(s.noSizeOption, { size: shown })));
+    const mute = (t: string) => ctaBox.replaceChildren(h('p', { class: 'tsc-mute' }, t));
+    if (!sizeMatched) return mute(fmt(s.noSizeOption, { size: shown }));
+    const offered = isOffered(config, shown);
     const pick = inStockPick(rec, shown, config, currentVariantId(document, config));
+    if (!pick && !offered) return mute(fmt(s.notOffered, { size: shown }));
     if (!pick) return ctaBox.replaceChildren(h('button', { type: 'button', class: 'tsc-primary', disabled: true }, s.soldOut));
 
     let busy = false;
@@ -129,7 +135,9 @@ export const renderResult: ScreenRenderer = (ctx) => {
         statusEl.textContent = result.message ?? s.addError;
       }
     });
-    const note = pick.substituted ? [h('p', { class: 'tsc-mute tsc-sub-note' }, fmt(s.substituted, { size: shown, alt: pick.size }))] : [];
+    const note = pick.substituted
+      ? [h('p', { class: 'tsc-mute tsc-sub-note' }, fmt(offered ? s.substituted : s.notOfferedAlt, { size: shown, alt: pick.size }))]
+      : [];
     ctaBox.replaceChildren(...note, button, statusEl);
   };
 

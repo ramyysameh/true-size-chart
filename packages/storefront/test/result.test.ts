@@ -178,6 +178,39 @@ describe('result screen', () => {
     expect(text(root, '.tsc-cta')).toBe(fmt(STRINGS.noSizeOption, { size: 'XL' }));
   });
 
+  it('says a size the product does not carry is not available, then offers the next best in stock', async () => {
+    const config: FinderConfig = { ...BASE, variants: BASE.variants.filter((v) => v.options[1] !== 'XL') };
+    const rec = finalRecommendation(DRAFT, DEV_CHART);
+    const alt = inStockPick(rec, 'XL', config, WHITE_M)!.size;
+    const root = await openResult({ config });
+    expect(text(root, '.tsc-sub-note')).toBe(fmt(STRINGS.notOfferedAlt, { size: 'XL', alt }));
+    expect(ctaButton(root)?.textContent).toBe(cta(alt, STRINGS));
+    expect(root.textContent).not.toContain('sold out');
+  });
+
+  it('says a size the product does not carry is not available when nothing else is in stock', async () => {
+    const config: FinderConfig = {
+      ...BASE,
+      variants: BASE.variants.filter((v) => v.options[1] !== 'XL').map((v) => ({ ...v, available: false })),
+    };
+    const root = await openResult({ config });
+    expect(ctaButton(root)).toBeNull();
+    expect(text(root, '.tsc-cta')).toBe(fmt(STRINGS.notOffered, { size: 'XL' }));
+    // A size the product does carry, sold out everywhere, is still sold out.
+    sizeButton(root, 'L').click();
+    expect(ctaButton(root)?.textContent).toBe(STRINGS.soldOut);
+  });
+
+  it('asks the shopper to pick on the page when no chart size matches a variant', async () => {
+    const config: FinderConfig = {
+      ...BASE,
+      variants: BASE.variants.map((v) => ({ ...v, options: [v.options[0]!, `Size ${v.options[1]}`] })),
+    };
+    const root = await openResult({ config });
+    expect(ctaButton(root)).toBeNull();
+    expect(text(root, '.tsc-cta')).toBe(fmt(STRINGS.noSizeOption, { size: 'XL' }));
+  });
+
   it('re-renders the breakdown, % and CTA for a tapped size', async () => {
     const rec = finalRecommendation(DRAFT, DEV_CHART);
     const root = await openResult();

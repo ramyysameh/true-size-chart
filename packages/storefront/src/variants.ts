@@ -28,19 +28,28 @@ export function currentVariantId(doc: Document, config: FinderConfig, location: 
   return config.selectedVariantId;
 }
 
-/** The variant for a size label, preferring the current variant with only its size option swapped. */
-export function variantForSize(config: FinderConfig, size: string, currentId: number): VariantInfo | null {
+function withSize(config: FinderConfig, size: string): VariantInfo[] {
   const index = config.sizeOptionIndex;
-  if (index === null) return null;
-
+  if (index === null) return [];
   const wanted = norm(size);
-  const matches = config.variants.filter((v) => norm(v.options[index] ?? '') === wanted);
-  if (matches.length === 0) return null;
+  return config.variants.filter((v) => norm(v.options[index] ?? '') === wanted);
+}
 
+/** Whether any variant at all carries this size label; a size that is not offered is never "sold out". */
+export function isOffered(config: FinderConfig, size: string): boolean {
+  return withSize(config, size).length > 0;
+}
+
+/**
+ * The current variant with only its size option swapped, else null: the shopper's colour is never changed.
+ * Only when the current variant is unknown, any variant with the size, available first.
+ */
+export function variantForSize(config: FinderConfig, size: string, currentId: number): VariantInfo | null {
+  const matches = withSize(config, size);
   const current = config.variants.find((v) => v.id === currentId);
   if (current) {
-    const swapped = matches.find((v) => v.options.every((option, i) => i === index || option === current.options[i]));
-    if (swapped) return swapped;
+    const index = config.sizeOptionIndex;
+    return matches.find((v) => v.options.every((option, i) => i === index || option === current.options[i])) ?? null;
   }
   return matches.find((v) => v.available) ?? matches[0] ?? null;
 }

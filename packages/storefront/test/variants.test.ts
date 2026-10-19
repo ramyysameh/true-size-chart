@@ -1,7 +1,7 @@
 import type { Recommendation, SizeScore } from '@true-size-chart/engine';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FinderConfig } from '../src/config';
-import { currentVariantId, inStockPick, variantForSize } from '../src/variants';
+import { currentVariantId, inStockPick, isOffered, variantForSize } from '../src/variants';
 import { CONFIG, mountConfig } from './fixtures/config';
 
 // Fixture ids: 1000 + colorIndex * 10 + sizeIndex; Black = 0, White = 1; sizes S, M, L, XL.
@@ -56,13 +56,15 @@ describe('variantForSize', () => {
     expect(variantForSize(CONFIG, 'XL', BLACK_M)?.id).toBe(BLACK_XL);
   });
 
-  it('falls back to any variant with the size, available first', () => {
-    const onlyBlackXl: FinderConfig = {
-      ...CONFIG,
-      variants: CONFIG.variants.filter((v) => v.id !== WHITE_XL),
-    };
+  it('is null when the current colour lacks the size, even though another colour has it', () => {
+    const noWhiteXl: FinderConfig = { ...CONFIG, variants: CONFIG.variants.filter((v) => v.id !== WHITE_XL) };
+    expect(variantForSize(noWhiteXl, 'XL', WHITE_M)).toBeNull();
+  });
+
+  it('falls back to any variant with the size, available first, only when the current variant is unknown', () => {
+    const onlyBlackXl: FinderConfig = { ...CONFIG, variants: CONFIG.variants.filter((v) => v.id !== WHITE_XL) };
     // Black/XL is the only XL left, so it is returned even though it is unavailable.
-    expect(variantForSize(onlyBlackXl, 'XL', WHITE_M)?.id).toBe(BLACK_XL);
+    expect(variantForSize(onlyBlackXl, 'XL', 999)?.id).toBe(BLACK_XL);
 
     const mixed: FinderConfig = {
       ...CONFIG,
@@ -72,7 +74,8 @@ describe('variantForSize', () => {
         { id: 3, available: true, options: ['Blue', 'S'] },
       ],
     };
-    expect(variantForSize(mixed, 'M', 3)?.id).toBe(2);
+    expect(variantForSize(mixed, 'M', 999)?.id).toBe(2);
+    expect(variantForSize(mixed, 'M', 3)).toBeNull();
   });
 
   it('is null without a size option', () => {
@@ -127,6 +130,16 @@ describe('inStockPick', () => {
     expect(inStockPick(shuffled, 'XL', CONFIG, BLACK_M)?.size).toBe('L');
   });
 
+  it('stays in the current colour when only another colour has the size in stock', () => {
+    const config: FinderConfig = {
+      ...CONFIG,
+      variants: CONFIG.variants.filter((v) => v.id !== WHITE_XL).map((v) => (v.id === BLACK_XL ? { ...v, available: true } : v)),
+    };
+    const pick = inStockPick(rec(scores), 'XL', config, WHITE_M);
+    expect(pick).toMatchObject({ size: 'L', substituted: true });
+    expect(pick?.variant.options).toEqual(['White', 'L']);
+  });
+
   it('is null when every size is unavailable', () => {
     const config: FinderConfig = { ...CONFIG, variants: CONFIG.variants.map((v) => ({ ...v, available: false })) };
     expect(inStockPick(rec(scores), 'XL', config, BLACK_M)).toBeNull();
@@ -139,5 +152,18 @@ describe('inStockPick', () => {
       variants: CONFIG.variants.map((v) => ({ ...v, available: v.options[1] === 'S' })),
     };
     expect(inStockPick(rec(scores), 'XL', config, BLACK_M)).toBeNull();
+  });
+});
+
+describe('isOffered', () => {
+  it('is true when any variant carries the size label, in stock or not', () => {
+    expect(isOffered(CONFIG, 'xl ')).toBe(true);
+    const soldOut: FinderConfig = { ...CONFIG, variants: CONFIG.variants.map((v) => ({ ...v, available: false })) };
+    expect(isOffered(soldOut, 'M')).toBe(true);
+  });
+
+  it('is false for a size no variant carries, and without a size option', () => {
+    expect(isOffered(CONFIG, 'XXL')).toBe(false);
+    expect(isOffered({ ...CONFIG, sizeOptionIndex: null }, 'M')).toBe(false);
   });
 });
