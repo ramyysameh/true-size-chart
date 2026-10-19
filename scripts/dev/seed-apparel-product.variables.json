@@ -1,0 +1,185 @@
+{
+  "input": {
+    "title": "TSC Test Tee",
+    "handle": "tsc-test-tee",
+    "status": "ACTIVE",
+    "vendor": "True: Size Chart",
+    "productType": "T-Shirt",
+    "productOptions": [
+      {
+        "name": "Size",
+        "values": [
+          {
+            "name": "S"
+          },
+          {
+            "name": "M"
+          },
+          {
+            "name": "L"
+          },
+          {
+            "name": "XL"
+          }
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          {
+            "name": "Black"
+          },
+          {
+            "name": "White"
+          }
+        ]
+      }
+    ],
+    "variants": [
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "S"
+          },
+          {
+            "optionName": "Color",
+            "name": "Black"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-BLACK-S",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "M"
+          },
+          {
+            "optionName": "Color",
+            "name": "Black"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-BLACK-M",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "L"
+          },
+          {
+            "optionName": "Color",
+            "name": "Black"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-BLACK-L",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "XL"
+          },
+          {
+            "optionName": "Color",
+            "name": "Black"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-BLACK-XL",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": true
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "S"
+          },
+          {
+            "optionName": "Color",
+            "name": "White"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-WHITE-S",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "M"
+          },
+          {
+            "optionName": "Color",
+            "name": "White"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-WHITE-M",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "L"
+          },
+          {
+            "optionName": "Color",
+            "name": "White"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-WHITE-L",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      },
+      {
+        "optionValues": [
+          {
+            "optionName": "Size",
+            "name": "XL"
+          },
+          {
+            "optionName": "Color",
+            "name": "White"
+          }
+        ],
+        "price": "49.00",
+        "sku": "TSC-TEE-WHITE-XL",
+        "inventoryPolicy": "DENY",
+        "inventoryItem": {
+          "tracked": false
+        }
+      }
+    ]
+  }
+}

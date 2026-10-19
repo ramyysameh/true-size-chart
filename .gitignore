@@ -34,3 +34,4 @@ dist/
 packages/engine/data/
 .env
 scripts/dev/link-chart.variables.json
+scripts/perf/results/
