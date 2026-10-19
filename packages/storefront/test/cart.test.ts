@@ -18,6 +18,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const sent = () => {
@@ -57,6 +58,57 @@ describe('addToCart', () => {
     expect(body.sections).toBe('cart-icon-bubble');
     expect(body.sections_url).toBe(window.location.pathname);
     expect(document.getElementById('cart-icon-bubble')?.innerHTML).toBe('<span>3</span>');
+  });
+
+  it("also asks for Dawn's cart drawer, swaps #CartDrawer and clears is-empty when <cart-drawer> exists", async () => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<cart-drawer class="drawer is-empty"><div id="CartDrawer"><p>Your cart is empty</p></div></cart-drawer><div id="cart-icon-bubble"><span>0</span></div>',
+    );
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        sections: {
+          'cart-drawer':
+            '<div id="shopify-section-cart-drawer" class="shopify-section"><cart-drawer class="drawer"><div id="CartDrawer"><p>1 item</p></div></cart-drawer></div>',
+          'cart-icon-bubble': '<div class="shopify-section"><span>1</span></div>',
+        },
+      }),
+    );
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    expect(sent().body.sections).toBe('cart-drawer,cart-icon-bubble');
+    expect(document.getElementById('CartDrawer')?.innerHTML).toBe('<p>1 item</p>');
+    expect(document.querySelector('cart-drawer')?.classList.contains('is-empty')).toBe(false);
+    expect(document.getElementById('cart-icon-bubble')?.innerHTML).toBe('<span>1</span>');
+  });
+
+  it('asks only for the sections whose elements are on the page', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
+    fetchMock.mockResolvedValue(reply(200, {}));
+    await addToCart(CONFIG, ID, document);
+    expect(sent().body.sections).toBe('cart-drawer');
+    expect(sent().body.sections_url).toBe(window.location.pathname);
+  });
+
+  it('reports the add as done when a section swap throws, and still swaps the others', async () => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<cart-drawer class="drawer is-empty"><div id="CartDrawer"></div></cart-drawer><div id="cart-icon-bubble"><span>0</span></div>',
+    );
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        sections: { 'cart-drawer': '<div id="CartDrawer"></div>', 'cart-icon-bubble': '<div class="shopify-section"><span>1</span></div>' },
+      }),
+    );
+    vi.spyOn(DOMParser.prototype, 'parseFromString').mockImplementationOnce(() => {
+      throw new Error('theme markup');
+    });
+    const seen: unknown[] = [];
+    const onAdded = (e: Event) => seen.push((e as CustomEvent).detail);
+    document.addEventListener('tsc:cart-added', onAdded);
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    document.removeEventListener('tsc:cart-added', onAdded);
+    expect(seen).toEqual([{ variantId: ID }]);
+    expect(document.getElementById('cart-icon-bubble')?.innerHTML).toBe('<span>1</span>');
   });
 
   it('leaves the bubble alone when the response has no section', async () => {
