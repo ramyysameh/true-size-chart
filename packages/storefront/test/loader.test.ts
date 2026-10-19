@@ -17,6 +17,7 @@ const chartLink = () => doc.querySelector<HTMLElement>('[data-tsc-open="chart"]'
 const label = () => doc.querySelector('[data-tsc-label]')?.textContent;
 const fire = (el: Element, type: string) => el.dispatchEvent(new win.Event(type, { bubbles: true }) as unknown as Event);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const on = () => doc.documentElement.classList.contains('tsc-on');
 const run = () => boot(doc, win as unknown as globalThis.Window);
 
 /** Defines a stub finder whose `open` is a mock; returns the mock. */
@@ -35,7 +36,6 @@ beforeEach(() => {
   win = new Window();
   doc = win.document as unknown as Document;
   mountConfig(doc);
-  button().setAttribute('data-tsc-pending', '');
   doc.body.insertAdjacentHTML(
     'beforeend',
     '<a data-tsc-open="chart" data-tsc-default="Size chart"><span data-tsc-label>Size chart</span></a>',
@@ -48,11 +48,11 @@ afterEach(() => {
 });
 
 describe('boot', () => {
-  it('loads nothing on its own and reveals the openers', () => {
+  it('loads nothing on its own and turns the openers on', () => {
     run();
     expect(scripts()).toHaveLength(0);
     expect(preloads()).toHaveLength(0);
-    expect(button().hasAttribute('data-tsc-pending')).toBe(false);
+    expect(on()).toBe(true);
   });
 
   it('does nothing without a config block', () => {
@@ -61,7 +61,7 @@ describe('boot', () => {
     fire(button(), 'pointerover');
     fire(button(), 'click');
     expect(scripts()).toHaveLength(0);
-    expect(button().hasAttribute('data-tsc-pending')).toBe(true);
+    expect(on()).toBe(false);
     expect(button().hasAttribute('aria-busy')).toBe(false);
   });
 
@@ -69,6 +69,17 @@ describe('boot', () => {
     win.localStorage.setItem(PROFILE_KEY, JSON.stringify({ v: 1, sizes: { 'dev-tshirt-unisex': 'L' } }));
     run();
     expect(label()).toBe('Your size: L');
+  });
+
+  it('repaints openers re-rendered by the theme on shopify:section:load, from storage as it is now', () => {
+    run();
+    win.localStorage.setItem(PROFILE_KEY, JSON.stringify({ v: 1, sizes: { 'dev-tshirt-unisex': 'M' } }));
+    const section = doc.createElement('div');
+    section.innerHTML =
+      '<button data-tsc-open data-tsc-default="Find my size" data-tsc-remembered="Your size: {size}"><span data-tsc-label>Find my size</span></button>';
+    doc.body.append(section);
+    fire(section, 'shopify:section:load');
+    expect([...doc.querySelectorAll('button [data-tsc-label]')].map((n) => n.textContent)).toEqual(['Your size: M', 'Your size: M']);
   });
 
   it('keeps the default label when storage throws or holds junk', () => {
@@ -150,6 +161,31 @@ describe('boot with the finder defined', () => {
     await settle();
     expect(doc.querySelectorAll(TAG)).toHaveLength(1);
     expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it('never opens for a click whose script failed, even once a later hover loads it', async () => {
+    run();
+    fire(button(), 'click');
+    fire(scripts()[0]!, 'error');
+    fire(button(), 'pointerover');
+    const open = defineStub();
+    await settle();
+    expect(open).not.toHaveBeenCalled();
+    expect(button().hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('opens only for the last of two openers clicked while loading, and leaves neither busy', async () => {
+    run();
+    fire(button(), 'click');
+    fire(chartLink(), 'click');
+    expect(button().hasAttribute('aria-busy')).toBe(false);
+    expect(chartLink().getAttribute('aria-busy')).toBe('true');
+    const open = defineStub();
+    await settle();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith({ tab: 'chart', trigger: chartLink() });
+    expect(button().hasAttribute('aria-busy')).toBe(false);
+    expect(chartLink().hasAttribute('aria-busy')).toBe(false);
   });
 
   it('warns once and clears aria-busy when open rejects, with no unhandled rejection', async () => {

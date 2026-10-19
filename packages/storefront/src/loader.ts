@@ -21,18 +21,25 @@ export function boot(doc: Document, win: Window): void {
   } catch {
     return;
   }
-  for (const el of doc.querySelectorAll(OPENER)) el.removeAttribute('data-tsc-pending');
+  // The block hides openers until this class is on <html>, so buttons the theme re-renders later show too.
+  doc.documentElement.classList.add('tsc-on');
 
-  let size: string | undefined;
-  try {
-    size = JSON.parse(win.localStorage.getItem(PROFILE_KEY)!).sizes[config.chart.key];
-  } catch {
-    /* no storage, no profile or a different shape: keep the default label */
-  }
-  paintRemembered(doc, size);
+  const paint = () => {
+    let size: string | undefined;
+    try {
+      size = JSON.parse(win.localStorage.getItem(PROFILE_KEY)!).sizes[config.chart.key];
+    } catch {
+      /* no storage, no profile or a different shape: keep the default label */
+    }
+    paintRemembered(doc, size);
+  };
+  paint();
+  // The theme editor (and some themes on variant change) re-render the section with the default label.
+  doc.addEventListener('shopify:section:load', paint);
 
   const add = (tag: string, props: object) => doc.head.appendChild(Object.assign(doc.createElement(tag), props));
   let loading = false;
+  /** The trigger of the click waiting for the script; only it may open the finder. */
   let busy: Element | undefined;
 
   const handle = async (e: Event) => {
@@ -50,19 +57,24 @@ export function boot(doc: Document, win: Window): void {
           script.remove();
           loading = false;
           busy?.removeAttribute(BUSY);
+          busy = undefined;
         },
       });
     }
     if (e.type != 'click') return;
 
+    busy?.removeAttribute(BUSY);
     (busy = btn).setAttribute(BUSY, 'true');
     try {
       await win.customElements.whenDefined(TAG);
+      // A later click took over, or this load failed and a later one succeeded: not this click's drawer.
+      if (busy != btn) return;
       const finder = (doc.querySelector(TAG) ?? doc.body.appendChild(doc.createElement(TAG))) as Finder;
       await finder.open({ tab: btn.dataset.tscOpen == 'chart' ? 'chart' : 'finder', trigger: btn });
     } catch {
       console.warn('TSC: open failed');
     }
+    if (busy == btn) busy = undefined;
     btn.removeAttribute(BUSY);
   };
 
