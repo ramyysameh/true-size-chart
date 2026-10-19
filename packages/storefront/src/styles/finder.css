@@ -122,7 +122,7 @@ button { font: inherit; color: inherit; letter-spacing: inherit; background: non
 .tsc-ring circle { stroke: var(--tsc-line); }
 .tsc-ring .tsc-arc { stroke: var(--tsc-fg); stroke-linecap: round; }
 .tsc-conf { margin-top: 6px; }
-.tsc-sizes { display: flex; justify-content: center; gap: 8px; margin-top: 32px; }
+.tsc-sizes { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px 8px; margin-top: 32px; }
 .tsc-sizes button { position: relative; min-width: 44px; padding: 10px 6px; border-bottom: 1px solid transparent; font-size: 16px; }
 .tsc-sizes [aria-pressed="true"] { border-color: var(--tsc-fg); font-weight: 600; }
 .tsc-you { position: absolute; bottom: 100%; left: 0; right: 0; font-size: 9px; }

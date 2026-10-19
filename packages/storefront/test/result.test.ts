@@ -153,6 +153,27 @@ describe('result screen', () => {
     expect(link?.getAttribute('href')).toBe('/cart');
   });
 
+  it('disables the size buttons while the add is in flight, then enables them again', async () => {
+    let finish!: (value: unknown) => void;
+    fetchMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const root = await openResult();
+    const buttons = () => [...root.querySelectorAll<HTMLButtonElement>('.tsc-sizes button')];
+    ctaButton(root)!.click();
+    expect(buttons().every((b) => b.disabled)).toBe(true);
+    // A tap during the add can't swap the CTA out from under the confirmation.
+    sizeButton(root, 'L').click();
+    finish({ ok: true, status: 200, json: async () => ({}) });
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe('Added to bag'));
+    expect(buttons().every((b) => !b.disabled)).toBe(true);
+
+    fetchMock.mockRejectedValue(new TypeError('offline'));
+    sizeButton(root, 'L').click();
+    ctaButton(root)!.click();
+    expect(buttons().every((b) => b.disabled)).toBe(true);
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe(STRINGS.addError));
+    expect(buttons().every((b) => !b.disabled)).toBe(true);
+  });
+
   it('shows the add error and lets the shopper try again', async () => {
     fetchMock.mockRejectedValue(new TypeError('offline'));
     const root = await openResult();
@@ -292,8 +313,18 @@ describe('result screen', () => {
       close() {},
     };
     renderResult(ctx);
-    await Promise.resolve();
     expect(go).toHaveBeenCalledWith('body');
     expect(localStorage.getItem(PROFILE_KEY)).toBeNull();
+  });
+
+  it('goes to the size chart when the engine can score no size', () => {
+    const go = vi.fn();
+    const config: FinderConfig = {
+      ...CONFIG,
+      chart: { ...CONFIG.chart, table: { sizes: ['S', 'M'], measurements: { hip: [96, 100] } } },
+    };
+    const ctx: FinderContext = { config, strings: { ...STRINGS }, draft: DRAFT, setDraft() {}, go, close() {} };
+    renderResult(ctx);
+    expect(go).toHaveBeenCalledWith('chart');
   });
 });

@@ -22,7 +22,9 @@ function cell(value: unknown, from: Unit, to: Unit): string | null {
 /** The size chart tab: the merchant's table (flat stays flat), a cm | in toggle and how to measure. */
 export const renderChart: ScreenRenderer = ({ config, strings: s }) => {
   const { table, unit, basis, howToMeasure } = config.chart;
-  const dims = DIMS.filter((d) => table.measurements[d]);
+  // A chart with sizes but no measurements still renders: rows of sizes, no columns.
+  const measurements = table.measurements ?? {};
+  const dims = DIMS.filter((d) => measurements[d]);
   const cells: [HTMLElement, unknown][] = [];
 
   const rows = table.sizes.map((size, i) =>
@@ -32,7 +34,7 @@ export const renderChart: ScreenRenderer = ({ config, strings: s }) => {
       h('th', { scope: 'row' }, size),
       ...dims.map((d) => {
         const td = h('td');
-        cells.push([td, table.measurements[d]?.[i]]);
+        cells.push([td, measurements[d]?.[i]]);
         return td;
       }),
     ),

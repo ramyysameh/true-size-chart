@@ -1,6 +1,6 @@
-import { ChartError, normalizeChart } from '@true-size-chart/engine';
+import { ChartError, recommend } from '@true-size-chart/engine';
 import { readConfig, toChartInput, type FinderConfig } from '../config';
-import { defaultDraft, type Draft } from '../model';
+import { defaultDraft, toProfile, type Draft } from '../model';
 import { loadProfile } from '../profile-store';
 import { STRINGS, type Strings } from '../strings';
 import { h } from './dom';
@@ -107,13 +107,19 @@ export class TrueSizeFinder extends HTMLElement {
     if (!config) return this.disable('no #tsc-config on the page');
     this.finderOk = true;
     try {
-      normalizeChart(toChartInput(config.chart));
+      // A dry run, not just normalizeChart: a valid chart can still have no dimension the category is scored on.
+      recommend(toProfile(defaultDraft(config, null)), toChartInput(config.chart));
     } catch (error) {
       if (!(error instanceof ChartError)) throw error;
       // The engine cannot use this chart: the size chart tab only.
       this.finderOk = false;
       if (!config.chart.table.sizes?.length) return this.disable('the size chart has no sizes');
     }
+
+    // Session-replay tools record open shadow roots, which would capture height and weight.
+    this.setAttribute('data-clarity-mask', 'true');
+    this.setAttribute('data-hj-suppress', '');
+    this.classList.add('ph-no-capture', 'lo-ignore');
 
     const strings: Strings = { ...STRINGS, ...config.strings };
     const ctx: FinderContext = {
@@ -222,7 +228,10 @@ export class TrueSizeFinder extends HTMLElement {
 
     const render = this.renderers.get(screen) ?? TrueSizeFinder.defaultScreens.get(screen);
     ui.body.textContent = '';
-    if (render) ui.body.append(render(this.ctx));
+    const node = render?.(this.ctx);
+    // The renderer went elsewhere (ctx.go) while rendering: that screen is already painted.
+    if (this.screen !== screen) return;
+    if (node) ui.body.append(node);
     ui.body.scrollTop = 0;
 
     // A control that vanished with the old screen (e.g. Back on step 2) must not drop focus out of the dialog.

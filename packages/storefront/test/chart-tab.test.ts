@@ -78,4 +78,10 @@ describe('size chart tab', () => {
     const root = render({ table: { sizes: ['S', 'M'], measurements: { chest: [49] } } });
     expect(texts(root, 'tbody td')).toEqual(['49', '—']);
   });
+
+  it('renders the size rows and no columns for a chart with no measurements', () => {
+    const root = render({ table: { sizes: ['S', 'M'] } as FinderConfig['chart']['table'] });
+    expect(texts(root, 'tbody th')).toEqual(['S', 'M']);
+    expect(root.querySelectorAll('thead th')).toHaveLength(0);
+  });
 });

@@ -126,13 +126,36 @@ describe('<true-size-finder>', () => {
   });
 
   it('never leaves the page scroll-locked when the first render throws, and retries', async () => {
-    const config = { ...BASE, chart: { ...BASE.chart, table: { sizes: ['S'] } } } as unknown as FinderConfig;
-    const { el } = setup(config);
-    await expect(el.open()).rejects.toThrow();
+    const { el } = setup();
+    el.registerScreen('body', () => {
+      throw new Error('broken screen');
+    });
+    await expect(el.open()).rejects.toThrow('broken screen');
     expect(document.documentElement.style.overflow).toBe('');
     expect(shown(el)).toBe(false);
-    await expect(el.open()).rejects.toThrow();
+    await expect(el.open()).rejects.toThrow('broken screen');
     expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('shows only the screen a renderer redirected to while rendering', async () => {
+    const { el } = setup();
+    el.registerScreen('body', (ctx) => {
+      ctx.go('chart');
+      return h('div', { 'data-testid': 'body' });
+    });
+    await open(el);
+    expect($(el, '[data-testid="body"]')).toBeNull();
+    expect($(el, '[role="tabpanel"]')!.childElementCount).toBe(1);
+    expect($(el, 'table')).not.toBeNull();
+    expect($(el, '[role="tab"][aria-selected="true"]')?.textContent).toBe('Size chart');
+  });
+
+  it('masks the host from session-replay tools, which record open shadow roots', async () => {
+    const { el } = setup();
+    await open(el);
+    expect(el.getAttribute('data-clarity-mask')).toBe('true');
+    expect(el.getAttribute('data-hj-suppress')).toBe('');
+    expect([...el.classList]).toEqual(expect.arrayContaining(['ph-no-capture', 'lo-ignore']));
   });
 
   it('rethrows a config error that is not a ChartError', async () => {
@@ -224,6 +247,19 @@ describe('<true-size-finder>', () => {
     const config: FinderConfig = {
       ...BASE,
       chart: { ...BASE.chart, table: { sizes: ['S', 'M', 'L', 'XL'], measurements: { chest: [49, 52] } } },
+    };
+    const { el } = setup(config);
+    await open(el);
+    expect(tabs(el)).toEqual(['Size chart']);
+    expect($(el, 'table')).not.toBeNull();
+    expect($(el, '.tsc-foot')!.hidden).toBe(true);
+  });
+
+  it('shows only the size chart when no dimension of the chart can be scored', async () => {
+    // A valid t-shirt chart, but the engine scores tops on chest, waist and length only.
+    const config: FinderConfig = {
+      ...BASE,
+      chart: { ...BASE.chart, table: { sizes: ['S', 'M', 'L', 'XL'], measurements: { hip: [96, 100, 104, 108] } } },
     };
     const { el } = setup(config);
     await open(el);

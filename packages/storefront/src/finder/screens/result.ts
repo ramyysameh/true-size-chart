@@ -1,4 +1,4 @@
-import { ProfileError, fitMatchFromError, type Recommendation } from '@true-size-chart/engine';
+import { ChartError, ProfileError, fitMatchFromError, type Recommendation } from '@true-size-chart/engine';
 import { addToCart } from '../../cart';
 import { toChartInput } from '../../config';
 import { resultCopy } from '../../copy';
@@ -27,10 +27,12 @@ export const renderResult: ScreenRenderer = (ctx) => {
   try {
     rec = finalRecommendation(draft, toChartInput(config.chart));
   } catch (error) {
-    if (!(error instanceof ProfileError)) throw error;
-    clearProfile();
-    // After this render returns: the shell's go() is not re-entrant.
-    queueMicrotask(() => ctx.go('body'));
+    // No size the engine can score: the size chart. A profile it rejects: forget it and ask again.
+    if (error instanceof ChartError) ctx.go('chart');
+    else if (error instanceof ProfileError) {
+      clearProfile();
+      ctx.go('body');
+    } else throw error;
     return h('div');
   }
   saveProfile(toProfile(draft), draft.units, config.chart.key, rec.size);
@@ -119,9 +121,12 @@ export const renderResult: ScreenRenderer = (ctx) => {
       const now = inStockPick(rec, shown, config, currentVariantId(document, config));
       if (!now || now.size !== pick.size) return paintCta();
       busy = true;
+      // A size tapped mid-add would repaint the CTA and lose the confirmation.
+      sizeButtons.forEach((b) => b.toggleAttribute('disabled', true));
       button.setAttribute('aria-busy', 'true');
       button.textContent = s.adding;
       const result = await addToCart(config, now.variant.id, document);
+      sizeButtons.forEach((b) => b.removeAttribute('disabled'));
       if (result.ok) {
         const link = h('a', { href: config.routes.cart, class: 'tsc-label' }, s.viewBag);
         button.remove();
