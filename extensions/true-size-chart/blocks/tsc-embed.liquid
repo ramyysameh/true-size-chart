@@ -42,7 +42,7 @@
         "product": {
           "title": {{ product.title | json }},
           "image": {% if product.featured_image %}{{ product.featured_image | image_url: width: 160 | json }}{% else %}null{% endif %},
-          "price": {{ selected_variant.price | money | json }}
+          "price": {{ selected_variant.price | money | strip_html | json }}
         },
         "variants": [
           {%- for variant in product.variants -%}

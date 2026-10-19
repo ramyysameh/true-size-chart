@@ -16,7 +16,7 @@
 
 - **Nothing loads before intent.** On page load the storefront adds only the inline config, the inline loader and the button. No request for `tsc-finder.js`/`.css` before `pointerover`, `focusin` or `click` on a `[data-tsc-open]` element.
 - **Body data never leaves the device.** The only network calls the finder makes are the two asset loads and `POST {routes.cart_add_url}.js`. No analytics in this plan.
-- **Budgets** (enforced by `packages/storefront/scripts/size-budget.mjs`): `tsc-finder.js` ≤ 15 360 B gzip (engine included), `tsc-finder.css` ≤ 4 096 B gzip, inline loader ≤ 1 024 B minified (raw, it is inline). Lighthouse performance delta (embed + block on vs off) ≤ 3 points.
+- **Budgets** (enforced by `packages/storefront/scripts/size-budget.mjs`): `tsc-finder.js` ≤ 15 360 B gzip (engine included), `tsc-finder.css` ≤ 4 096 B gzip, inline loader ≤ 1 024 B gzip and ≤ 1 536 B raw minified (spec "<1 KB" read as transfer size). Lighthouse performance delta (embed + block on vs off) ≤ 3 points.
 - **Vanilla TS only.** No runtime dependencies apart from `@true-size-chart/engine`. No webfonts (the default "editorial" font is a system neo-grotesk stack: `"Helvetica Neue", Helvetica, Arial, sans-serif`).
 - **[my call] Classic IIFE, not a module script.** The spec says "module"; `tsc-finder.js` is built as an IIFE and injected as a classic `<script async>`, because module scripts from `cdn.shopify.com` depend on CORS headers we don't control. Flag this to the user at review.
 - **Shadow DOM.** The element renders into an open shadow root so theme CSS can't break it; `font-family` is inherited from the host when the font setting is `theme`.

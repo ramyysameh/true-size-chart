@@ -40,11 +40,12 @@ Then, in the admin, make the product available on the **Online Store** channel.
 The finder must cost at most 3 Lighthouse points on the product page. Unlock the store in a browser, copy the `storefront_digest` cookie value, then:
 
 ```bash
-export TSC_LH_COOKIE=<storefront_digest value>
+export TSC_LH_COOKIE=<storefront_digest value>          # bash
+# PowerShell: $env:TSC_LH_COOKIE = "<storefront_digest value>"
 node scripts/perf/lighthouse.mjs --url https://STORE/products/tsc-test-tee --label on    # embed and block enabled
 # disable the embed and remove the block, then:
 node scripts/perf/lighthouse.mjs --url https://STORE/products/tsc-test-tee --label off
 node scripts/perf/lighthouse.mjs --compare off on                                         # exit 1 when off - on > 3
 ```
 
-Each run takes the median of 5 mobile Lighthouse runs (`--runs` to change) and writes `scripts/perf/results/<label>.json` (git-ignored). Re-enable the embed and block afterwards.
+Each run takes the median of 5 mobile Lighthouse runs (`--runs` to change) and writes `scripts/perf/results/<label>.json` (git-ignored). A single Lighthouse run is noisy by ±3–5 points, as much as the whole budget, so keep `--runs` at 5 or more. Re-enable the embed and block afterwards.
