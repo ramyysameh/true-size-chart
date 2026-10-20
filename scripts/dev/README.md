@@ -48,4 +48,11 @@ node scripts/perf/lighthouse.mjs --url https://STORE/products/tsc-test-tee --lab
 node scripts/perf/lighthouse.mjs --compare off on                                         # exit 1 when off - on > 3
 ```
 
+Without the cookie, run Lighthouse inside a separate Chrome instead. Start one with its own profile and a debugging port (not 9222, which a normal Chrome may already hold), unlock the store in it, keep it open, and pass `--port`. Background throttling must be off or Lighthouse times out:
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9333 --user-data-dir="$env:TEMP\tsc-lh-profile" --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling https://STORE/password
+node scripts/perf/lighthouse.mjs --url https://STORE/products/tsc-test-tee --label on --port 9333
+```
+
 Each run takes the median of 5 mobile Lighthouse runs (`--runs` to change) and writes `scripts/perf/results/<label>.json` (git-ignored). A single Lighthouse run is noisy by ±3–5 points, as much as the whole budget, so keep `--runs` at 5 or more. Re-enable the embed and block afterwards.

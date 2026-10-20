@@ -5,8 +5,9 @@
 //   node scripts/perf/lighthouse.mjs --compare off on
 //
 // `--label on` is measured with the app embed and "Find my size" block enabled,
-// `--label off` with both disabled. The password-protected dev store needs the
-// storefront_digest cookie, passed through the TSC_LH_COOKIE environment variable.
+// `--label off` with both disabled. The password-protected dev store needs either the
+// storefront_digest cookie (TSC_LH_COOKIE) or `--port` pointing at a Chrome started with
+// --remote-debugging-port in which the store is already unlocked.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,15 +19,16 @@ const LABELS = ['off', 'on'];
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'results');
 
 const USAGE = `Usage:
-  node scripts/perf/lighthouse.mjs --url <pdp> --label <off|on> [--runs 5]
+  node scripts/perf/lighthouse.mjs --url <pdp> --label <off|on> [--runs 5] [--port 9222]
   node scripts/perf/lighthouse.mjs --compare off on
 
   --url      product page to audit
   --label    "on" (embed and block enabled) or "off" (both disabled)
   --runs     Lighthouse runs, the median performance score is kept (default 5)
+  --port     audit inside a running Chrome (started with --remote-debugging-port) where the store is unlocked
   --compare  print both medians and the delta (off - on); exit 1 when the delta exceeds ${MAX_DELTA}
 
-Environment:
+Environment (when --port is not given):
   TSC_LH_COOKIE  value of the storefront_digest cookie from an unlocked browser session`;
 
 function fail(message) {
@@ -70,7 +72,8 @@ function compare(a, b) {
 // One command string through the shell: npx is npx.cmd on Windows, which cannot be spawned directly.
 const quote = (value) => `"${value}"`;
 
-function runLighthouse(url, headersFile, outFile) {
+/** `access` is either `{ port }` (a running, unlocked Chrome) or `{ headersFile }` (cookie header). */
+function runLighthouse(url, access, outFile) {
   const command = [
     'npx lighthouse@12',
     quote(url),
@@ -79,8 +82,9 @@ function runLighthouse(url, headersFile, outFile) {
     '--output=json',
     `--output-path=${quote(outFile)}`,
     '--quiet',
-    '--chrome-flags="--headless=new"',
-    `--extra-headers=${quote(headersFile)}`,
+    ...(access.port
+      ? [`--port=${access.port}`]
+      : ['--chrome-flags="--headless=new"', `--extra-headers=${quote(access.headersFile)}`]),
   ].join(' ');
   const result = spawnSync(command, { stdio: ['ignore', 'inherit', 'inherit'], shell: true });
   if (result.status !== 0) {
@@ -92,19 +96,22 @@ function runLighthouse(url, headersFile, outFile) {
   return Math.round(score * 100);
 }
 
-function measure(url, label, runs) {
+function measure(url, label, runs, port) {
   const cookie = process.env.TSC_LH_COOKIE;
-  if (!cookie) fail('TSC_LH_COOKIE is not set (storefront_digest cookie value).');
+  if (!port && !cookie) fail('Pass --port, or set TSC_LH_COOKIE (storefront_digest cookie value).');
 
   const dir = mkdtempSync(join(tmpdir(), 'tsc-lh-'));
-  const headersFile = join(dir, 'headers.json');
   const outFile = join(dir, 'report.json');
-  writeFileSync(headersFile, JSON.stringify({ Cookie: `storefront_digest=${cookie}` }));
+  let access = { port };
+  if (!port) {
+    access = { headersFile: join(dir, 'headers.json') };
+    writeFileSync(access.headersFile, JSON.stringify({ Cookie: `storefront_digest=${cookie}` }));
+  }
 
   const scores = [];
   try {
     for (let i = 1; i <= runs; i++) {
-      const score = runLighthouse(url, headersFile, outFile);
+      const score = runLighthouse(url, access, outFile);
       console.log(`run ${i}/${runs}: ${score}`);
       scores.push(score);
     }
@@ -132,7 +139,7 @@ function main(argv) {
   const flags = new Map();
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
-    if (!['--url', '--label', '--runs'].includes(flag) || argv[i + 1] === undefined) {
+    if (!['--url', '--label', '--runs', '--port'].includes(flag) || argv[i + 1] === undefined) {
       fail(`Unexpected argument: ${flag}`);
     }
     flags.set(flag, argv[i + 1]);
@@ -144,7 +151,9 @@ function main(argv) {
   if (!url) fail('--url is required.');
   if (!LABELS.includes(label)) fail('--label must be "off" or "on".');
   if (!Number.isInteger(runs) || runs < 1) fail('--runs must be a positive integer.');
-  measure(url, label, runs);
+  const port = flags.has('--port') ? Number(flags.get('--port')) : undefined;
+  if (port !== undefined && !(Number.isInteger(port) && port > 0)) fail('--port must be a port number.');
+  measure(url, label, runs, port);
 }
 
 main(process.argv.slice(2));
