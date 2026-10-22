@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChartTable } from '@true-size-chart/engine';
-import { blankDraft } from './chart-model';
+import { blankDraft, fromFields, toFields } from './chart-model';
 import {
   addDim, addSize, availableDims, cellText, draftKey, parseDraftBody, removeDim, removeSize, setCell, setSizeLabel,
 } from './chart-edit';
@@ -74,6 +74,12 @@ describe('draftKey', () => {
       table: { sizes: ['S', 'M'], measurements: { length: [null, 70], chest: [50, 54] }, aliases: { y: 'M', x: 'S' } },
     };
     expect(draftKey(a)).toBe(draftKey(b));
+  });
+
+  it('is unchanged by a save round trip that normalizes aliases', () => {
+    const d = { ...blankDraft(), name: 'Tee', table: { ...base(), aliases: { ' Small ': 'S', gone: 'XXL' } } };
+    const saved = fromFields('id', 'tee-1', toFields(d));
+    expect(draftKey(saved)).toBe(draftKey(d));
   });
 
   it('differs when a cell, a size or a field changes', () => {

@@ -1,5 +1,5 @@
 import { DIMS, type ChartTable, type Dim } from '@true-size-chart/engine';
-import { norm, type ChartDraft } from './chart-model';
+import { norm, pruneAliases, type ChartDraft } from './chart-model';
 
 function clone(t: ChartTable): ChartTable {
   const measurements: ChartTable['measurements'] = {};
@@ -83,7 +83,8 @@ export function draftKey(d: ChartDraft): string {
     const col = d.table.measurements[dim];
     if (col) measurements[dim] = col;
   }
-  const aliases = Object.entries(d.table.aliases ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  // Aliases are compared as saved: normalized keys, dangling targets dropped.
+  const aliases = Object.entries(pruneAliases(d.table).aliases ?? {}).sort(([a], [b]) => a.localeCompare(b));
   return JSON.stringify([
     d.name, d.category, d.audience, d.unit, d.basis, d.intendedFit, d.howToMeasure,
     d.table.sizes, measurements, aliases,

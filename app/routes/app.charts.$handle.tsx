@@ -124,8 +124,17 @@ function ChartEditor() {
   };
 
   useEffect(() => {
-    void (dirty ? shopify.saveBar.show("chart-save-bar") : shopify.saveBar.hide("chart-save-bar"));
+    void (dirty ? shopify?.saveBar.show("chart-save-bar") : shopify?.saveBar.hide("chart-save-bar"));
   }, [dirty, shopify]);
+
+  // Leaving the editor must not leave the bar up.
+  useEffect(() => () => void shopify?.saveBar.hide("chart-save-bar"), [shopify]);
+
+  // After a successful save, the saved chart is the new baseline.
+  const savedDraft = result?.saved ? result.draft : undefined;
+  useEffect(() => {
+    if (savedDraft) setDraft(savedDraft);
+  }, [savedDraft]);
 
   const update = (patch: Partial<ChartDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const updateTable = (fn: (t: ChartDraft["table"]) => ChartDraft["table"]) =>
