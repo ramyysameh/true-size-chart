@@ -25,7 +25,7 @@ export const renderResult: ScreenRenderer = (ctx) => {
   const { config, strings: s, draft } = ctx;
   let rec: Recommendation;
   try {
-    rec = finalRecommendation(draft, toChartInput(config.chart));
+    rec = finalRecommendation(draft, toChartInput(config.chart), config.chart.audience);
   } catch (error) {
     // No size the engine can score: the size chart. A profile it rejects: forget it and ask again.
     if (error instanceof ChartError) ctx.go('chart');
