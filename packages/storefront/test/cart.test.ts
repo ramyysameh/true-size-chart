@@ -29,7 +29,7 @@ const sent = () => {
 describe('addToCart', () => {
   it('posts the variant to <cartAdd>.js and resolves ok', async () => {
     fetchMock.mockResolvedValue(reply(200, { items: [] }));
-    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true, drawer: false });
     const { url, init, body } = sent();
     expect(url).toBe('/cart/add.js');
     expect(init.method).toBe('POST');
@@ -74,7 +74,7 @@ describe('addToCart', () => {
         },
       }),
     );
-    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true, drawer: false });
     expect(sent().body.sections).toBe('cart-drawer,cart-icon-bubble');
     expect(document.getElementById('CartDrawer')?.innerHTML).toBe('<p>1 item</p>');
     expect(document.querySelector('cart-drawer')?.classList.contains('is-empty')).toBe(false);
@@ -95,19 +95,22 @@ describe('addToCart', () => {
       },
     };
     fetchMock.mockResolvedValue(reply(200, body));
-    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true, drawer: true });
     expect(renderContents).toHaveBeenCalledTimes(1);
     expect(renderContents).toHaveBeenCalledWith(body);
     expect(document.getElementById('CartDrawer')?.innerHTML).toBe('<p>Your cart is empty</p>');
   });
 
-  it('reports the add as done when renderContents throws', async () => {
+  it('falls back to swapping #CartDrawer, with drawer false, when renderContents throws', async () => {
     document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
     (document.querySelector('cart-drawer') as unknown as { renderContents: unknown }).renderContents = () => {
       throw new Error('theme');
     };
-    fetchMock.mockResolvedValue(reply(200, { sections: {} }));
-    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    fetchMock.mockResolvedValue(
+      reply(200, { sections: { 'cart-drawer': '<div class="shopify-section"><div id="CartDrawer"><p>1 item</p></div></div>' } }),
+    );
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true, drawer: false });
+    expect(document.getElementById('CartDrawer')?.innerHTML).toBe('<p>1 item</p>');
   });
 
   it('asks only for the sections whose elements are on the page', async () => {
@@ -134,7 +137,7 @@ describe('addToCart', () => {
     const seen: unknown[] = [];
     const onAdded = (e: Event) => seen.push((e as CustomEvent).detail);
     document.addEventListener('tsc:cart-added', onAdded);
-    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true, drawer: false });
     document.removeEventListener('tsc:cart-added', onAdded);
     expect(seen).toEqual([{ variantId: ID }]);
     expect(document.getElementById('cart-icon-bubble')?.innerHTML).toBe('<span>1</span>');

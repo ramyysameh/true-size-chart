@@ -1,6 +1,6 @@
 import type { FinderConfig } from './config';
 
-export type AddResult = { ok: true } | { ok: false; message: string | null };
+export type AddResult = { ok: true; drawer: boolean } | { ok: false; message: string | null };
 
 const BUBBLE_ID = 'cart-icon-bubble';
 /** Dawn's cart drawer: the <cart-drawer> element, its section id, and the node its section swaps. */
@@ -65,7 +65,7 @@ export async function addToCart(config: FinderConfig, variantId: number, doc: Do
   if (typeof renderContents == 'function') {
     try {
       renderContents.call(drawer, body);
-      return { ok: true };
+      return { ok: true, drawer: true };
     } catch {
       /* fall back to swapping the sections ourselves */
     }
@@ -80,5 +80,5 @@ export async function addToCart(config: FinderConfig, variantId: number, doc: Do
   } catch {
     /* the bubble stays as it was */
   }
-  return { ok: true };
+  return { ok: true, drawer: false };
 }

@@ -131,7 +131,10 @@ export const renderResult: ScreenRenderer = (ctx) => {
       button.textContent = s.adding;
       const result = await addToCart(config, now.variant.id, document);
       sizeButtons.forEach((b) => b.removeAttribute('disabled'));
-      if (result.ok) {
+      if (result.ok && result.drawer) {
+        // The theme's cart drawer opens itself next tick: get out of its way (one modal at a time).
+        ctx.close();
+      } else if (result.ok) {
         const link = h('a', { href: config.routes.cart, class: 'tsc-label' }, s.viewBag);
         button.remove();
         statusEl.textContent = s.added;

@@ -160,6 +160,31 @@ describe('result screen', () => {
     expect(link?.getAttribute('href')).toBe('/cart');
   });
 
+  it('closes the finder before the theme cart drawer opens, and keeps it open without a drawer', async () => {
+    const state = { hiddenWhenDrawerOpened: false, overflowWhenDrawerOpened: 'hidden' };
+    const root = await openResult();
+    const panelRoot = root.querySelector<HTMLElement>('.tsc-root')!;
+    document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
+    // Dawn's renderContents opens the drawer from a timer; record what the finder looked like at that moment.
+    (document.querySelector('cart-drawer') as unknown as { renderContents: unknown }).renderContents = () =>
+      void setTimeout(() => {
+        state.hiddenWhenDrawerOpened = panelRoot.hidden;
+        state.overflowWhenDrawerOpened = document.documentElement.style.overflow;
+      }, 0);
+    expect(panelRoot.hidden).toBe(false);
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ sections: {} }) });
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(panelRoot.hidden).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(state).toEqual({ hiddenWhenDrawerOpened: true, overflowWhenDrawerOpened: '' });
+
+    const again = await openResult();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    ctaButton(again)!.click();
+    await vi.waitFor(() => expect(text(again, '.tsc-status')).toBe('Added to bag'));
+    expect(document.documentElement.style.overflow).toBe('hidden');
+  });
+
   it('disables the size buttons while the add is in flight, then enables them again', async () => {
     let finish!: (value: unknown) => void;
     fetchMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
