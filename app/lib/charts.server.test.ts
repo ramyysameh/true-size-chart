@@ -41,6 +41,24 @@ describe('gql', () => {
     await expect(gql(admin, 'query {a}')).rejects.toBeInstanceOf(AdminError);
   });
 
+  it('throws AdminError naming the status for a non-JSON response', async () => {
+    const admin: AdminClient = {
+      async graphql() {
+        return new Response('<html>Bad Gateway</html>', { status: 502 });
+      },
+    };
+    const err = (await gql(admin, "query {a}").catch((e) => e)) as Error;
+    expect(err).toBeInstanceOf(AdminError);
+    expect(err.message).toContain('502');
+  });
+
+  it('throws AdminError when the body has neither data nor errors', async () => {
+    const { admin } = fakeAdmin([{}]);
+    await expect(gql(admin, 'query {a}')).rejects.toBeInstanceOf(AdminError);
+    const { admin: a2 } = fakeAdmin([{ message: 'Forbidden' }]);
+    await expect(gql(a2, 'query {a}')).rejects.toThrow(/Forbidden/);
+  });
+
   it('retries a THROTTLED response then succeeds', async () => {
     const wait = vi.fn(async () => {});
     const { admin, calls } = fakeAdmin([

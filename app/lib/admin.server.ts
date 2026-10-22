@@ -36,8 +36,19 @@ export async function gql<T>(
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const response = await admin.graphql(query, variables ? { variables } : undefined);
-    const body = (await response.json()) as { data?: T; errors?: GqlError[] };
-    if (!body.errors?.length) return body.data as T;
+    let body: { data?: T | null; errors?: GqlError[]; message?: string };
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      throw new AdminError(`Shopify returned a non-JSON response (HTTP ${response.status}).`);
+    }
+    if (!body?.errors?.length) {
+      if (body?.data == null) {
+        const detail = typeof body?.message === 'string' ? `: ${body.message}` : '';
+        throw new AdminError(`Shopify returned no data (HTTP ${response.status})${detail}`);
+      }
+      return body.data;
+    }
 
     const throttled = body.errors.some((e) => e.extensions?.code === 'THROTTLED');
     if (throttled && attempt < MAX_ATTEMPTS) {
