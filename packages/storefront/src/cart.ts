@@ -60,6 +60,16 @@ export async function addToCart(config: FinderConfig, variantId: number, doc: Do
 
   // The add has succeeded: theme markup we misread may leave a widget stale, never turn this into a failure.
   const rendered = body.sections ?? {};
+  // Dawn's own renderContents re-renders the drawer and bubble, rebinds the overlay and opens the drawer.
+  const { renderContents } = (drawer ?? {}) as { renderContents?: (state: unknown) => void };
+  if (typeof renderContents == 'function') {
+    try {
+      renderContents.call(drawer, body);
+      return { ok: true };
+    } catch {
+      /* fall back to swapping the sections ourselves */
+    }
+  }
   try {
     if (drawer && swap(doc.getElementById(DRAWER_INNER), rendered[DRAWER], `#${DRAWER_INNER}`)) drawer.classList.remove('is-empty');
   } catch {

@@ -81,6 +81,35 @@ describe('addToCart', () => {
     expect(document.getElementById('cart-icon-bubble')?.innerHTML).toBe('<span>1</span>');
   });
 
+  it("hands the response to <cart-drawer>'s renderContents and leaves #CartDrawer untouched", async () => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<cart-drawer class="drawer is-empty"><div id="CartDrawer"><p>Your cart is empty</p></div></cart-drawer><div id="cart-icon-bubble"><span>0</span></div>',
+    );
+    const renderContents = vi.fn();
+    (document.querySelector('cart-drawer') as unknown as { renderContents: unknown }).renderContents = renderContents;
+    const body = {
+      sections: {
+        'cart-drawer': '<div class="shopify-section"><div id="CartDrawer"><p>1 item</p></div></div>',
+        'cart-icon-bubble': '<div class="shopify-section"><span>1</span></div>',
+      },
+    };
+    fetchMock.mockResolvedValue(reply(200, body));
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+    expect(renderContents).toHaveBeenCalledTimes(1);
+    expect(renderContents).toHaveBeenCalledWith(body);
+    expect(document.getElementById('CartDrawer')?.innerHTML).toBe('<p>Your cart is empty</p>');
+  });
+
+  it('reports the add as done when renderContents throws', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
+    (document.querySelector('cart-drawer') as unknown as { renderContents: unknown }).renderContents = () => {
+      throw new Error('theme');
+    };
+    fetchMock.mockResolvedValue(reply(200, { sections: {} }));
+    await expect(addToCart(CONFIG, ID, document)).resolves.toEqual({ ok: true });
+  });
+
   it('asks only for the sections whose elements are on the page', async () => {
     document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
     fetchMock.mockResolvedValue(reply(200, {}));
