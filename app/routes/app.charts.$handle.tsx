@@ -25,6 +25,7 @@ import {
   setCell,
   setSizeLabel,
 } from "../lib/chart-edit";
+import { ChartPreview } from "../components/ChartPreview";
 import { parsePastedTable } from "../lib/paste";
 
 const BASIS_LABELS: Record<ChartDraft["basis"], string> = {
@@ -380,10 +381,7 @@ function ChartEditor() {
             </s-section>
           </s-stack>
 
-          {/* Task 8 replaces this section with <ChartPreview>. */}
-          <s-section heading="Preview">
-            <s-paragraph>Preview arrives in the next step.</s-paragraph>
-          </s-section>
+          <ChartPreview draft={draft} />
         </s-grid>
       </form>
 
