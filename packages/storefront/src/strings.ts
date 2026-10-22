@@ -67,6 +67,7 @@ export const STRINGS = {
   addToBag: 'Add {size} to bag',
   adding: 'Addingâ€¦',
   added: 'Added to bag',
+  previewAdded: 'Preview only — nothing was added to a cart.',
   viewBag: 'View bag',
   substituted: '{size} is sold out. {alt} is the next best fit in stock.',
   soldOut: 'Sold out in your size',

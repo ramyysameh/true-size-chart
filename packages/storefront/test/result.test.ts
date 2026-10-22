@@ -138,6 +138,13 @@ describe('result screen', () => {
     expect(root.querySelector('.tsc-sub-note')).toBeNull();
   });
 
+  it('preview mode never touches the cart and says so', async () => {
+    const root = await openResult({ config: { ...BASE, preview: true } });
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe(STRINGS.previewAdded));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('adds the White/XL variant and links to the bag', async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     const root = await openResult();

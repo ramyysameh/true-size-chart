@@ -120,6 +120,10 @@ export const renderResult: ScreenRenderer = (ctx) => {
       // Re-read the variant: the shopper may have changed colour on the page since this rendered.
       const now = inStockPick(rec, shown, config, currentVariantId(document, config));
       if (!now || now.size !== pick.size) return paintCta();
+      if (config.preview) {
+        statusEl.textContent = s.previewAdded;
+        return;
+      }
       busy = true;
       // A size tapped mid-add would repaint the CTA and lose the confirmation.
       sizeButtons.forEach((b) => b.toggleAttribute('disabled', true));

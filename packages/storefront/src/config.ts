@@ -29,6 +29,8 @@ export interface FinderConfig {
   settings: { font: 'theme' | 'editorial'; accent: string; radius: number };
   /** Merchant overrides, merged over the built-in strings. */
   strings: Record<string, string>;
+  /** Admin preview: the add button never touches a cart. */
+  preview?: boolean;
 }
 
 /** Reads the block's inline config; null when it is absent or not JSON. */
