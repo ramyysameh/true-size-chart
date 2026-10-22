@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseChartHandles, parseStep, setupChecklist, templatesToCreate } from './onboarding';
+import { parseChartHandles, parseStep, safeReturnTo, setupChecklist, templatesToCreate } from './onboarding';
 
 describe('parseStep', () => {
   it('defaults to 1 and clamps to 1-4', () => {
@@ -30,14 +30,26 @@ describe('templatesToCreate', () => {
 
 describe('setupChecklist', () => {
   it('marks each step and links to its fix', () => {
-    const items = setupChecklist({ embed: 'active', block: 'available', charts: 1, rules: 0, issues: 0 });
+    const items = setupChecklist({ embed: 'active', block: 'available', charts: 1, rules: 0 });
     expect(items.map((i) => [i.key, i.done])).toEqual([
       ['embed', true],
       ['block', false],
       ['charts', true],
       ['rules', false],
-      ['mapping', true],
+      ['mapping', false],
     ]);
     expect(items.find((i) => i.key === 'rules')?.href).toBe('/app/rules');
+  });
+});
+
+describe('safeReturnTo', () => {
+  it('accepts onboarding paths only', () => {
+    expect(safeReturnTo('/app/onboarding?step=2&charts=a,b')).toBe('/app/onboarding?step=2&charts=a,b');
+    expect(safeReturnTo('/app/onboarding')).toBe('/app/onboarding');
+    expect(safeReturnTo('/app/onboardingx')).toBeNull();
+    expect(safeReturnTo('//evil.com')).toBeNull();
+    expect(safeReturnTo('https://evil.com/app/onboarding')).toBeNull();
+    expect(safeReturnTo('/app/onboarding?x=\\evil')).toBeNull();
+    expect(safeReturnTo(null)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { redirect, useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { CATEGORIES, TEMPLATES } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
@@ -62,7 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
   const shop = session.shop;
   const url = new URL(request.url);
   const handles = parseChartHandles(url.searchParams.get("charts"));
@@ -87,7 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (result.draft.handle) all.push(result.draft.handle);
     }
     if (all.length === 0) return { error: "Pick at least one chart, or skip this step." };
-    return redirect(onboardingUrl(2, all));
+    return await redirect(onboardingUrl(2, all));
   }
 
   if (intent === "rules") {
@@ -125,13 +125,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await requestSync(shop);
       }
     }
-    return redirect(onboardingUrl(4, handles));
+    return await redirect(onboardingUrl(4, handles));
   }
 
-  if (intent === "finish") {
+  if (intent === "finish" || intent === "skip") {
     const onboardedAt = new Date();
     await db.shopState.upsert({ where: { shop }, create: { shop, onboardedAt }, update: { onboardedAt } });
-    return redirect("/app");
+    return await redirect(intent === "skip" ? "/app/charts" : "/app");
   }
 
   return { error: "Unknown action." };
@@ -218,7 +218,7 @@ function StepTemplates({ data, busy, post }: StepProps) {
           >
             Continue
           </s-button>
-          <s-button href="/app/charts" variant="tertiary">
+          <s-button variant="tertiary" disabled={busy} onClick={() => post({ intent: "skip" })}>
             Skip, I will build my own
           </s-button>
         </s-stack>
@@ -241,7 +241,7 @@ function StepReview({ data }: { data: Data }) {
                 <s-text type="strong">{c.name}</s-text>
                 <s-text color="subdued">Sizes: {c.sizes}</s-text>
               </s-stack>
-              <s-link href={`/app/charts/${c.handle}`}>Edit</s-link>
+              <s-link href={`/app/charts/${c.handle}?returnTo=${encodeURIComponent(onboardingUrl(2, data.handles))}`}>Edit</s-link>
             </s-stack>
           ))
         )}

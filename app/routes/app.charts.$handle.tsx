@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { redirect, useFetcher, useLoaderData, useParams, useSearchParams } from "react-router";
+import { useFetcher, useLoaderData, useParams, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { TEMPLATES, type Dim } from "@true-size-chart/engine";
@@ -27,6 +27,7 @@ import {
 } from "../lib/chart-edit";
 import { ChartPreview } from "../components/ChartPreview";
 import { parsePastedTable } from "../lib/paste";
+import { safeReturnTo } from "../lib/onboarding";
 
 const BASIS_LABELS: Record<ChartDraft["basis"], string> = {
   garment_flat: "Garment, flat",
@@ -76,7 +77,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 type ActionResult = { saved: boolean; errors: string[]; draft?: ChartDraft };
 
 export const action = async ({ request, params }: ActionFunctionArgs): Promise<ActionResult | Response> => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
   const form = await request.formData();
   let draft = parseDraftBody(String(form.get("draft") ?? ""));
   if (!draft) return { saved: false, errors: ["The chart could not be read. Reload the page and try again."] };
@@ -86,7 +87,11 @@ export const action = async ({ request, params }: ActionFunctionArgs): Promise<A
 
   const result = await saveChart(admin, draft);
   if (!result.ok) return { saved: false, errors: result.errors };
-  if (params.handle === "new") return redirect(`/app/charts/${result.draft.handle}`);
+  if (params.handle === "new") {
+    const returnTo = safeReturnTo(new URL(request.url).searchParams.get("returnTo"));
+    const suffix = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : "";
+    return await redirect(`/app/charts/${result.draft.handle}${suffix}`);
+  }
   return { saved: true, errors: [], draft: result.draft };
 };
 
@@ -101,6 +106,8 @@ function ChartEditor() {
   const shopify = useAppBridge();
   const { handle } = useParams();
   const { draft: loaded } = useLoaderData<typeof loader>();
+  const [search] = useSearchParams();
+  const returnTo = safeReturnTo(search.get("returnTo"));
   const fetcher = useFetcher<typeof action>();
   const [draft, setDraft] = useState<ChartDraft>(loaded);
   const [pasteText, setPasteText] = useState("");
@@ -159,9 +166,15 @@ function ChartEditor() {
 
   return (
     <s-page heading={draft.name.trim() || "New size chart"}>
-      <s-link slot="breadcrumb-actions" href="/app/charts">
-        Size charts
-      </s-link>
+      {returnTo ? (
+        <s-link slot="breadcrumb-actions" href={returnTo}>
+          Back to setup
+        </s-link>
+      ) : (
+        <s-link slot="breadcrumb-actions" href="/app/charts">
+          Size charts
+        </s-link>
+      )}
 
       <ui-save-bar id="chart-save-bar">
         <button variant="primary" onClick={save}>

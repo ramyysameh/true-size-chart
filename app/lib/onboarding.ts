@@ -46,13 +46,19 @@ export function setupChecklist(s: {
   block: ActivationState;
   charts: number;
   rules: number;
-  issues: number;
 }): ChecklistItem[] {
   return [
     { key: 'embed', label: 'Turn on the app embed', done: s.embed === 'active', href: '/app/onboarding?step=4' },
     { key: 'block', label: 'Place the size finder button on your product page', done: s.block === 'active', href: '/app/onboarding?step=4' },
     { key: 'charts', label: 'Create a size chart', done: s.charts > 0, href: '/app/charts' },
     { key: 'rules', label: 'Assign charts to products', done: s.rules > 0, href: '/app/rules' },
-    { key: 'mapping', label: 'Match product sizes to your charts', done: s.issues === 0, href: '/app/mapping' },
+    { key: 'mapping', label: 'Check size mapping', done: false, href: '/app/mapping' },
   ];
+}
+
+/** A `returnTo` that points back into onboarding; anything else (other paths, other origins) is rejected. */
+export function safeReturnTo(value: string | null | undefined): string | null {
+  if (!value || /[\\\s]/.test(value)) return null;
+  if (value === '/app/onboarding' || value.startsWith('/app/onboarding?')) return value;
+  return null;
 }

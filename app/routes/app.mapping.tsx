@@ -1,23 +1,26 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData } from "react-router";
+import { Await, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getChart, saveChart } from "../lib/charts.server";
-import { loadMappingIssues, saveSizeOptionNames } from "../lib/mapping.server";
-import { groupIssuesByChart, mergeAliases, parseSizeOptionNames } from "../lib/size-mapping";
+import { loadMappingIssues, loadSizeOptionNames, saveSizeOptionNames } from "../lib/mapping.server";
+import { groupIssuesByChart, type ChartIssueGroup, mergeAliases, parseSizeOptionNames } from "../lib/size-mapping";
+
+type Group = ChartIssueGroup & { handle: string; name: string; sizes: string[] };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const { issues, charts, sizeOptionNames } = await loadMappingIssues(admin, session.shop);
-  const byId = new Map(charts.map((c) => [c.id, c]));
-  const groups = groupIssuesByChart(issues).flatMap((g) => {
-    const chart = byId.get(g.chartId);
-    return chart
-      ? [{ ...g, handle: chart.handle ?? "", name: chart.name, sizes: chart.table.sizes }]
-      : [];
+  const sizeOptionNames = await loadSizeOptionNames(session.shop);
+  // Not awaited: the catalog scan streams in behind a spinner so navigation is not blocked.
+  const scan = loadMappingIssues(admin, session.shop).then(({ issues, charts }) => {
+    const byId = new Map(charts.map((c) => [c.id, c]));
+    return groupIssuesByChart(issues).flatMap((g) => {
+      const chart = byId.get(g.chartId);
+      return chart ? [{ ...g, handle: chart.handle ?? "", name: chart.name, sizes: chart.table.sizes }] : [];
+    });
   });
-  return { groups, sizeOptionNames, names: parseSizeOptionNames(sizeOptionNames) };
+  return { sizeOptionNames, names: parseSizeOptionNames(sizeOptionNames), scan };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -56,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Mapping() {
-  const { groups, sizeOptionNames, names } = useLoaderData<typeof loader>();
+  const { scan, sizeOptionNames, names } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const error = fetcher.data?.error ?? null;
@@ -67,7 +70,7 @@ export default function Mapping() {
 
   const submit = (data: Record<string, string>) => fetcher.submit(data, { method: "post" });
 
-  function saveMapping(g: (typeof groups)[number]) {
+  function saveMapping(g: Group) {
     const aliases: Record<string, string> = {};
     for (const v of g.values) {
       const pick = picks[key(g.chartId, v.value)];
@@ -109,6 +112,23 @@ export default function Mapping() {
         </s-stack>
       </s-section>
 
+      <Suspense
+        fallback={
+          <s-section heading="Checking your products">
+            <s-spinner accessibilityLabel="Checking your products" size="base"></s-spinner>
+          </s-section>
+        }
+      >
+        <Await
+          resolve={scan}
+          errorElement={
+            <s-banner tone="critical" heading="Could not check your products">
+              Reload the page to try again.
+            </s-banner>
+          }
+        >
+          {(groups) => (
+            <>
       {groups.length === 0 ? (
         <s-section heading="Everything matches">
           <s-paragraph>Every product&apos;s size labels match its chart.</s-paragraph>
@@ -162,6 +182,10 @@ export default function Mapping() {
           </s-section>
         ))
       )}
+            </>
+          )}
+        </Await>
+      </Suspense>
     </s-page>
   );
 }
