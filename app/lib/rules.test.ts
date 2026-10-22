@@ -64,9 +64,18 @@ describe('resolveChart', () => {
 });
 
 describe('planWrites', () => {
-  it('writes nothing without rules, even when a product already has a chart', () => {
+  it('writes nothing without rules for a shop that never managed rules, even when a product has a chart', () => {
     const products = [product({ chartId: 'chart-a' }), product({ id: 'p2', chartId: null })];
-    expect(planWrites(products, [])).toEqual({ set: [], unset: [] });
+    expect(planWrites(products, [], { managed: false })).toEqual({ set: [], unset: [] });
+  });
+
+  it('unsets every assigned product when a managed shop has no rules left', () => {
+    const products = [
+      product({ id: 'a', chartId: 'chart-a' }),
+      product({ id: 'b', chartId: null }),
+      product({ id: 'c', chartId: 'chart-b' }),
+    ];
+    expect(planWrites(products, [], { managed: true })).toEqual({ set: [], unset: ['a', 'c'] });
   });
 
   it('sets changed charts, skips unchanged ones and unsets products no rule matches', () => {
@@ -78,7 +87,7 @@ describe('planWrites', () => {
       product({ id: 'orphan', vendor: 'Other', chartId: 'chart-a' }),
       product({ id: 'none', vendor: 'Other', chartId: null }),
     ];
-    expect(planWrites(products, rules)).toEqual({
+    expect(planWrites(products, rules, { managed: true })).toEqual({
       set: [
         { ownerId: 'new', chartId: 'chart-a' },
         { ownerId: 'changed', chartId: 'chart-a' },

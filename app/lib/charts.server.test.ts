@@ -162,6 +162,13 @@ describe('listCharts / getChart / deleteChart', () => {
     expect(list.map((c) => c.name)).toEqual(['Chart 1', 'Chart 2']);
   });
 
+  it('throws instead of returning a truncated list when a next page has no cursor', async () => {
+    const { admin } = fakeAdmin([
+      { data: { metaobjects: { nodes: [node(1)], pageInfo: { hasNextPage: true, endCursor: null } } } },
+    ]);
+    await expect(listCharts(admin)).rejects.toBeInstanceOf(AdminError);
+  });
+
   it('listChartItems flags charts that products reference', async () => {
     const used = { ...node(1), referencedBy: { nodes: [{ referencer: { id: 'gid://shopify/Product/1' } }] } };
     const { admin } = fakeAdmin([

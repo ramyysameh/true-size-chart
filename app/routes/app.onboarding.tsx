@@ -6,7 +6,7 @@ import { CATEGORIES, TEMPLATES } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { gql } from "../lib/admin.server";
-import { requestSync } from "../lib/assign.server";
+import { markRulesManaged, requestSync } from "../lib/assign.server";
 import { draftFromTemplate, type ChartDraft } from "../lib/chart-model";
 import { getChart, listCharts, saveChart } from "../lib/charts.server";
 import { onboardingUrl, parseChartHandles, parseStep, templatesToCreate } from "../lib/onboarding";
@@ -122,6 +122,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             priority: last + 1 + i,
           })),
         });
+        await markRulesManaged(db, shop);
         await requestSync(shop);
       }
     }

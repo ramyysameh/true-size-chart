@@ -72,7 +72,9 @@ export async function listChartItems(admin: AdminClient): Promise<ChartListItem[
       });
     }
     const { hasNextPage, endCursor } = data.metaobjects.pageInfo;
-    if (!hasNextPage || !endCursor) break;
+    if (!hasNextPage) break;
+    // A partial list would make the sync treat live rules as orphaned and unset their products.
+    if (!endCursor) throw new AdminError('The chart list came back incomplete (next page without a cursor).');
     after = endCursor;
   }
   return items.sort((a, b) => a.draft.name.localeCompare(b.draft.name));

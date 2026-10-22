@@ -3,6 +3,7 @@ import { AdminError, type AdminClient } from './admin.server';
 import {
   claimSync,
   fetchAllFacts,
+  markRulesManaged,
   requestSync,
   runSync,
   syncProducts,
@@ -229,6 +230,7 @@ interface State {
   syncFinishedAt: Date | null;
   syncError: string | null;
   syncCounts: string | null;
+  rulesManaged: boolean;
 }
 
 type DateFilter = Date | null | { lte?: Date };
@@ -250,6 +252,7 @@ function fakePrisma(rules: Rule[], initial?: Partial<State>) {
     syncFinishedAt: null,
     syncError: null,
     syncCounts: null,
+    rulesManaged: false,
   });
   if (initial) states.set('s.myshopify.com', { ...blank('s.myshopify.com'), ...initial });
   const prisma = {
@@ -485,6 +488,64 @@ describe('runSync with a rule whose chart was deleted', () => {
     expect(values).toEqual(['chart-tee']);
     expect(values).not.toContain('chart-gone');
     expect(states.get(SHOP)!.syncError).toBeNull();
+  });
+});
+
+describe('runSync when rules are gone', () => {
+  const assigned = () => [
+    node(1, { sizeChart: { value: 'chart-tee' } }),
+    node(2),
+    node(3, { sizeChart: { value: 'chart-old' } }),
+  ];
+  const unsetIds = (mutations: () => Call[]) =>
+    mutations().flatMap((c) =>
+      c.query.includes('UnassignCharts')
+        ? (c.variables?.metafields as { ownerId: string }[]).map((m) => m.ownerId)
+        : [],
+    );
+
+  it('unsets every assigned product after the last rule of a managed shop was deleted', async () => {
+    const { prisma, states } = fakePrisma([], { rulesManaged: true });
+    const { admin, mutations } = fakeAdmin({ pages: [assigned()] });
+    const deps = { prisma, getAdmin: async () => admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(unsetIds(mutations)).toEqual(['gid://shopify/Product/1', 'gid://shopify/Product/3']);
+    expect(mutations().some((c) => c.query.includes('AssignCharts'))).toBe(false);
+    expect(JSON.parse(states.get(SHOP)!.syncCounts!)).toEqual({ checked: 3, set: 0, unset: 2 });
+  });
+
+  it('writes nothing for a shop that never had rules', async () => {
+    const { prisma, states } = fakePrisma([]);
+    const { admin, mutations } = fakeAdmin({ pages: [assigned()] });
+    const deps = { prisma, getAdmin: async () => admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(mutations()).toEqual([]);
+    expect(states.get(SHOP)!.syncError).toBeNull();
+  });
+
+  it('unsets the products of a deleted chart whose rules were the only ones', async () => {
+    const gone: Rule = { id: 'r0', chartId: 'chart-gone', type: 'product_type', value: 'tees', priority: 0 };
+    const { prisma } = fakePrisma([gone], { rulesManaged: true });
+    const { admin, mutations } = fakeAdmin({
+      pages: [[node(1, { sizeChart: { value: 'chart-gone' } }), node(2)]],
+      chartIds: [],
+    });
+    const deps = { prisma, getAdmin: async () => admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(unsetIds(mutations)).toEqual(['gid://shopify/Product/1']);
+  });
+});
+
+describe('markRulesManaged', () => {
+  it('creates or updates the shop state with rulesManaged', async () => {
+    const { prisma, states } = fakePrisma([]);
+    await markRulesManaged(prisma as never, SHOP);
+    expect(states.get(SHOP)!.rulesManaged).toBe(true);
+    await markRulesManaged(prisma as never, SHOP);
+    expect(states.get(SHOP)!.rulesManaged).toBe(true);
   });
 });
 

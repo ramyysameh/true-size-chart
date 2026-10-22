@@ -55,4 +55,5 @@ model ShopState {
   syncFinishedAt  DateTime?
   syncError       String?
   syncCounts      String?   // JSON {checked,set,unset}
+  rulesManaged    Boolean   @default(false) // set on the first rule insert: from then on, no rules = unset every product
 }

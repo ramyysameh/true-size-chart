@@ -7,7 +7,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { gql } from "../lib/admin.server";
 import { listCharts } from "../lib/charts.server";
-import { requestSync } from "../lib/assign.server";
+import { markRulesManaged, requestSync } from "../lib/assign.server";
 import type { RuleType } from "../lib/rules";
 import { relativeTime, syncStatus } from "../lib/sync-status";
 
@@ -84,6 +84,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await db.assignmentRule.createMany({
       data: values.map((v, i) => ({ shop, chartId, type, value: v.value, label: v.label || v.value, priority: start + i })),
     });
+    await markRulesManaged(db, shop);
   } else if (intent === "delete") {
     await db.assignmentRule.deleteMany({ where: { id: String(form.get("id") ?? ""), shop } });
   } else if (intent === "move") {
@@ -231,6 +232,9 @@ export default function Rules() {
             </s-table-body>
           </s-table>
         )}
+        <s-box padding="base">
+          <s-paragraph>Products that match no rule don’t show a size chart.</s-paragraph>
+        </s-box>
       </s-section>
 
       <s-section heading="Add rule">

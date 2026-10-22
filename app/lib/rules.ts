@@ -54,16 +54,19 @@ export function resolveChart(p: ProductFacts, rules: Rule[]): string | null {
 }
 
 /**
- * Metafield writes that bring products in line with the rules.
- * No rules means "assignment not set up": nothing is written or removed.
+ * Metafield writes that bring products in line with the rules. The app owns `$app.size_chart`.
+ * No rules in a shop that never had any (`managed: false`) means "assignment not set up": nothing is
+ * written or removed. Once the shop has had rules (`managed: true`), no rules means no product has a
+ * chart, so every assigned product is unset.
  */
 export function planWrites(
   products: ProductFacts[],
   rules: Rule[],
+  opts: { managed: boolean },
 ): { set: { ownerId: string; chartId: string }[]; unset: string[] } {
   const set: { ownerId: string; chartId: string }[] = [];
   const unset: string[] = [];
-  if (rules.length === 0) return { set, unset };
+  if (rules.length === 0 && !opts.managed) return { set, unset };
   const sorted = byPriority(rules);
   for (const p of products) {
     const resolved = resolveSorted(p, sorted);

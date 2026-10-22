@@ -98,7 +98,7 @@ export async function fetchAllFacts(admin: AdminClient): Promise<ProductFacts[]>
 export async function syncProducts(
   admin: AdminClient,
   rules: Rule[],
-  opts: { productId?: string } = {},
+  opts: { productId?: string; managed?: boolean } = {},
 ): Promise<{ checked: number; set: number; unset: number }> {
   let products: ProductFacts[];
   if (opts.productId) {
@@ -108,7 +108,7 @@ export async function syncProducts(
     products = await fetchAllFacts(admin);
   }
 
-  const { set, unset } = planWrites(products, rules);
+  const { set, unset } = planWrites(products, rules, { managed: opts.managed ?? false });
   // Each batch stands alone: a userError in one batch (metafieldsSet is atomic per call) must not
   // stop the others. Counts reflect successful batches only; all userErrors are thrown at the end.
   const userErrors: UserError[] = [];
@@ -168,6 +168,37 @@ export async function loadRules(prisma: SyncDeps['prisma'], shop: string): Promi
 }
 
 /**
+ * The shop's rules and whether the shop has ever had rules (`ShopState.rulesManaged`).
+ * Existing rules imply managed, so rules created before `rulesManaged` existed still count.
+ */
+export async function loadAssignment(
+  prisma: SyncDeps['prisma'],
+  shop: string,
+): Promise<{ rules: Rule[]; managed: boolean }> {
+  const [rules, state] = await Promise.all([
+    loadRules(prisma, shop),
+    prisma.shopState.findUnique({ where: { shop } }),
+  ]);
+  return { rules, managed: rules.length > 0 || (state?.rulesManaged ?? false) };
+}
+
+/** Rules whose chart still exists. A rule left behind by a deleted chart must never write a reference to a missing metaobject. */
+export async function liveRules(admin: AdminClient, rules: Rule[]): Promise<Rule[]> {
+  if (rules.length === 0) return rules;
+  const chartIds = new Set((await listCharts(admin)).map((d) => d.id));
+  return rules.filter((r) => chartIds.has(r.chartId));
+}
+
+/** Records that the shop now assigns charts by rules, so "no rules" later means "unset every product". */
+export async function markRulesManaged(prisma: Pick<PrismaClient, 'shopState'>, shop: string): Promise<void> {
+  await prisma.shopState.upsert({
+    where: { shop },
+    create: { shop, rulesManaged: true },
+    update: { rulesManaged: true },
+  });
+}
+
+/**
  * Records a sync request and claims the right to run the sync loop.
  * Returns true when the caller must run `runSync`: no sync ever started, the last one finished,
  * or the running one started over 10 minutes ago (presumed dead).
@@ -197,12 +228,9 @@ export async function claimSync(shop: string, deps: SyncDeps): Promise<boolean> 
 
 /** One pass: current rules, minus rules whose chart no longer exists, applied to every product. */
 async function syncPass(shop: string, deps: SyncDeps) {
-  const rules = await loadRules(deps.prisma, shop);
+  const { rules, managed } = await loadAssignment(deps.prisma, shop);
   const admin = await deps.getAdmin(shop);
-  const chartIds = new Set((await listCharts(admin)).map((d) => d.id));
-  // A rule left behind by a deleted chart must never write a reference to a missing metaobject.
-  const live = rules.filter((r) => chartIds.has(r.chartId));
-  return syncProducts(admin, live);
+  return syncProducts(admin, await liveRules(admin, rules), { managed });
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
