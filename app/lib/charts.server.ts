@@ -49,22 +49,37 @@ interface MetaobjectNode {
   fields: { key: string; value: string | null }[];
 }
 
-export async function listCharts(admin: AdminClient): Promise<ChartDraft[]> {
-  const charts: ChartDraft[] = [];
+export interface ChartListItem {
+  draft: ChartDraft;
+  /** At least one product references this chart. */
+  inUse: boolean;
+}
+
+export async function listChartItems(admin: AdminClient): Promise<ChartListItem[]> {
+  const items: ChartListItem[] = [];
   let after: string | null = null;
   for (;;) {
     const data: {
       metaobjects: {
-        nodes: MetaobjectNode[];
+        nodes: (MetaobjectNode & { referencedBy?: { nodes: unknown[] } | null })[];
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
       };
     } = await gql(admin, CHARTS, { after });
-    for (const n of data.metaobjects.nodes) charts.push(fromFields(n.id, n.handle, n.fields));
+    for (const n of data.metaobjects.nodes) {
+      items.push({
+        draft: fromFields(n.id, n.handle, n.fields),
+        inUse: (n.referencedBy?.nodes.length ?? 0) > 0,
+      });
+    }
     const { hasNextPage, endCursor } = data.metaobjects.pageInfo;
     if (!hasNextPage || !endCursor) break;
     after = endCursor;
   }
-  return charts.sort((a, b) => a.name.localeCompare(b.name));
+  return items.sort((a, b) => a.draft.name.localeCompare(b.draft.name));
+}
+
+export async function listCharts(admin: AdminClient): Promise<ChartDraft[]> {
+  return (await listChartItems(admin)).map((i) => i.draft);
 }
 
 export async function getChart(admin: AdminClient, handle: string): Promise<ChartDraft | null> {

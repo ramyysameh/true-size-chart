@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdminError, gql, type AdminClient } from './admin.server';
-import { deleteChart, getChart, listCharts, saveChart } from './charts.server';
+import { deleteChart, getChart, listChartItems, listCharts, saveChart } from './charts.server';
 import { blankDraft, toFields, type ChartDraft } from './chart-model';
 
 interface Call {
@@ -160,6 +160,18 @@ describe('listCharts / getChart / deleteChart', () => {
     expect(calls[0].variables).toEqual({ after: null });
     expect(calls[1].variables).toEqual({ after: 'c1' });
     expect(list.map((c) => c.name)).toEqual(['Chart 1', 'Chart 2']);
+  });
+
+  it('listChartItems flags charts that products reference', async () => {
+    const used = { ...node(1), referencedBy: { nodes: [{ referencer: { id: 'gid://shopify/Product/1' } }] } };
+    const { admin } = fakeAdmin([
+      { data: { metaobjects: { nodes: [node(2), used], pageInfo: { hasNextPage: false, endCursor: null } } } },
+    ]);
+    const items = await listChartItems(admin);
+    expect(items.map((i) => [i.draft.name, i.inUse])).toEqual([
+      ['Chart 1', true],
+      ['Chart 2', false],
+    ]);
   });
 
   it('getChart returns null when missing', async () => {
