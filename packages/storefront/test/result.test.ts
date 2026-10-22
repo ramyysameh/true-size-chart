@@ -141,7 +141,7 @@ describe('result screen', () => {
   it('preview mode never touches the cart and says so', async () => {
     const root = await openResult({ config: { ...BASE, preview: true } });
     ctaButton(root)!.click();
-    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe(STRINGS.previewAdded));
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe('Preview only \u2014 nothing was added to a cart.'));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
