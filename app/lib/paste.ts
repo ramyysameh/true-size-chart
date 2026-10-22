@@ -23,7 +23,7 @@ const SIZE_HEADERS = new Set(['size', 'sizes', 'size name', 'size label']);
 const DIM_ORDER: readonly Dim[] = ['chest', 'waist', 'hip', 'length', 'inseam'];
 const QUOTES = /["“”″]/g;
 const NO_SPLIT =
-  'Could not tell the columns apart. Copy the table from your spreadsheet, or separate columns with tabs or semicolons.';
+  'Could not tell the columns apart (a decimal comma like 52,5 can look like two cells). Copy the table from your spreadsheet, or separate columns with tabs or semicolons.';
 
 function cleanHeader(h: string): string {
   return h
@@ -69,7 +69,9 @@ function parseValue(raw: string): number | null | undefined {
 export function parsePastedTable(text: string): PasteResult {
   const split = splitRows(text);
   if ('error' in split) return { ok: false, error: split.error };
-  const width = Math.max(...split.map((r) => r.length));
+  // A data row wider than the header usually means a decimal comma ("52,5") was split. Never guess.
+  if (split.slice(1).some((r) => r.length > split[0].length)) return { ok: false, error: NO_SPLIT };
+  const width = split[0].length;
   let rows = split.map((r) => [...r, ...Array<string>(width - r.length).fill('')]);
 
   // Sizes across the top: the first column below the header names measurements.

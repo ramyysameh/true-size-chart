@@ -76,4 +76,22 @@ describe('parsePastedTable', () => {
     const r = parsePastedTable('Size\tChest\nS\tabc');
     expect(r.ok).toBe(false);
   });
+
+  it('errors instead of dropping a decimal-comma digit in comma-only data', () => {
+    const r = parsePastedTable('Size,Chest\nS,52,5\nM,55');
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/columns apart/i) });
+  });
+
+  it('errors on lines that are just a decimal comma', () => {
+    const r = parsePastedTable('Size\n52,5\n55,5');
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/columns apart/i) });
+  });
+
+  it('still reads a decimal comma in semicolon data', () => {
+    expect(ok('Size;Chest\nS;52,5').table.measurements.chest).toEqual([52.5]);
+  });
+
+  it('pads rows with fewer cells than the header with null', () => {
+    expect(ok('Size\tChest\tWaist\nS\t88').table.measurements).toEqual({ chest: [88], waist: [null] });
+  });
 });
