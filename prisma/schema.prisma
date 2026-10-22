@@ -32,3 +32,27 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model AssignmentRule {
+  id        String   @id @default(cuid())
+  shop      String
+  chartId   String   // metaobject GID
+  type      String   // product | collection | product_type | vendor | tag
+  value     String   // GID for product/collection, text otherwise
+  label     String   // what the merchant sees (product title, collection title, the text)
+  priority  Int
+  createdAt DateTime @default(now())
+
+  @@index([shop, priority])
+}
+
+model ShopState {
+  shop            String    @id
+  onboardedAt     DateTime?
+  sizeOptionNames String    @default("Size")
+  syncRequestedAt DateTime?
+  syncStartedAt   DateTime?
+  syncFinishedAt  DateTime?
+  syncError       String?
+  syncCounts      String?   // JSON {checked,set,unset}
+}
