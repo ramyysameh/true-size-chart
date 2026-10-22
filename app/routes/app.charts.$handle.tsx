@@ -276,7 +276,11 @@ function ChartEditor() {
                   label="Unit"
                   name="unit"
                   value={draft.unit}
-                  onChange={(e) => setDraft((d) => convertUnit(d, e.currentTarget.value as "cm" | "in"))}
+                  onChange={(e) => {
+                    // Read the event now: currentTarget is null by the time React runs the updater.
+                    const unit = e.currentTarget.value as "cm" | "in";
+                    setDraft((d) => convertUnit(d, unit));
+                  }}
                 >
                   <s-option value="cm">Centimeters (cm)</s-option>
                   <s-option value="in">Inches (in)</s-option>
@@ -350,7 +354,10 @@ function ChartEditor() {
                             label={`Size ${i + 1}`}
                             labelAccessibilityVisibility="exclusive"
                             value={size}
-                            onInput={(e) => updateTable((t) => setSizeLabel(t, i, e.currentTarget.value))}
+                            onInput={(e) => {
+                              const label = e.currentTarget.value;
+                              updateTable((t) => setSizeLabel(t, i, label));
+                            }}
                           ></s-text-field>
                         </s-table-cell>
                         {dims.map((d) => (
@@ -361,7 +368,10 @@ function ChartEditor() {
                               min={0}
                               step={0.5}
                               value={cellText(draft.table.measurements[d]?.[i])}
-                              onInput={(e) => updateTable((t) => setCell(t, d, i, e.currentTarget.value))}
+                              onInput={(e) => {
+                                const text = e.currentTarget.value;
+                                updateTable((t) => setCell(t, d, i, text));
+                              }}
                             ></s-number-field>
                           </s-table-cell>
                         ))}

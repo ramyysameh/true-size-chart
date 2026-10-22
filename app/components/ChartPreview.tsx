@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import finderCss from "../../extensions/true-size-chart/assets/tsc-finder.css?url";
-import finderJs from "../../extensions/true-size-chart/assets/tsc-finder.js?url";
 import { validateDraft, type ChartDraft } from "../lib/chart-model";
 import { previewConfig, previewDocument } from "../lib/preview";
 
 const DEBOUNCE_MS = 400;
+// Served by app/routes/preview-assets.$name.tsx from the committed theme-extension bundle.
+const finderJs = "/preview-assets/tsc-finder.js";
+const finderCss = "/preview-assets/tsc-finder.css";
 
 function buildDoc(draft: ChartDraft): string {
   const abs = (u: string) => new URL(u, window.location.href).href;
