@@ -1,0 +1,342 @@
+import { describe, expect, it } from 'vitest';
+import { AdminError, type AdminClient } from './admin.server';
+import { claimSync, fetchAllFacts, runSync, syncProducts, toFacts, type SyncDeps } from './assign.server';
+import type { Rule } from './rules';
+
+interface Call {
+  query: string;
+  variables?: Record<string, unknown>;
+}
+
+function node(i: number, over: Record<string, unknown> = {}) {
+  return {
+    id: `gid://shopify/Product/${i}`,
+    title: `P${i}`,
+    productType: 'Tees',
+    vendor: 'Acme',
+    tags: [],
+    collections: { nodes: [] },
+    options: [{ name: 'Size', optionValues: [{ name: 'S' }, { name: 'M' }] }],
+    sizeChart: null,
+    ...over,
+  };
+}
+
+/** Fake Admin API: serves product pages for ProductFacts, one product for OneProductFacts, ok for mutations. */
+function fakeAdmin(opts: { pages?: unknown[][]; one?: unknown; mutationErrors?: unknown[] } = {}) {
+  const calls: Call[] = [];
+  let page = 0;
+  const admin: AdminClient = {
+    async graphql(query, options) {
+      calls.push({ query, variables: options?.variables });
+      let data: unknown;
+      if (query.includes('query ProductFacts')) {
+        const pages = opts.pages ?? [[]];
+        const nodes = pages[page];
+        page++;
+        data = {
+          products: {
+            nodes,
+            pageInfo: { hasNextPage: page < pages.length, endCursor: `c${page}` },
+          },
+        };
+      } else if (query.includes('query OneProductFacts')) {
+        data = { product: opts.one ?? null };
+      } else if (query.includes('mutation AssignCharts')) {
+        data = { metafieldsSet: { metafields: [], userErrors: opts.mutationErrors ?? [] } };
+      } else if (query.includes('mutation UnassignCharts')) {
+        data = { metafieldsDelete: { deletedMetafields: [], userErrors: opts.mutationErrors ?? [] } };
+      } else {
+        throw new Error(`unexpected query ${query}`);
+      }
+      return new Response(JSON.stringify({ data }));
+    },
+  };
+  const mutations = () => calls.filter((c) => c.query.includes('mutation'));
+  return { admin, calls, mutations };
+}
+
+const teeRule: Rule = { id: 'r1', chartId: 'chart-tee', type: 'product_type', value: 'tees', priority: 0 };
+
+describe('toFacts', () => {
+  it('maps a product node and tolerates a missing metafield', () => {
+    expect(
+      toFacts(node(1, { tags: ['A'], collections: { nodes: [{ id: 'col' }] } })),
+    ).toEqual({
+      id: 'gid://shopify/Product/1',
+      title: 'P1',
+      productType: 'Tees',
+      vendor: 'Acme',
+      tags: ['A'],
+      collectionIds: ['col'],
+      options: [{ name: 'Size', values: ['S', 'M'] }],
+      chartId: null,
+    });
+    const withoutMetafield: Record<string, unknown> = node(2);
+    delete withoutMetafield.sizeChart;
+    expect(toFacts(withoutMetafield).chartId).toBeNull();
+    expect(toFacts(node(3, { sizeChart: { value: 'chart-x' } })).chartId).toBe('chart-x');
+  });
+});
+
+describe('fetchAllFacts', () => {
+  it('pages until hasNextPage is false', async () => {
+    const { admin, calls } = fakeAdmin({ pages: [[node(1), node(2)], [node(3)]] });
+    const facts = await fetchAllFacts(admin);
+    expect(facts.map((f) => f.title)).toEqual(['P1', 'P2', 'P3']);
+    expect(calls.map((c) => c.variables?.after)).toEqual([null, 'c1']);
+  });
+});
+
+describe('syncProducts', () => {
+  it('sends no mutation when the metafield already equals the resolved chart', async () => {
+    const { admin, mutations } = fakeAdmin({ one: node(1, { sizeChart: { value: 'chart-tee' } }) });
+    const result = await syncProducts(admin, [teeRule], { productId: 'gid://shopify/Product/1' });
+    expect(result).toEqual({ checked: 1, set: 0, unset: 0 });
+    expect(mutations()).toEqual([]);
+  });
+
+  it('fetches only the given product with OneProductFacts', async () => {
+    const { admin, calls } = fakeAdmin({ one: node(7) });
+    const result = await syncProducts(admin, [teeRule], { productId: 'gid://shopify/Product/7' });
+    expect(result).toEqual({ checked: 1, set: 1, unset: 0 });
+    expect(calls[0].query).toContain('query OneProductFacts');
+    expect(calls[0].variables).toEqual({ id: 'gid://shopify/Product/7' });
+    expect(calls[1].variables).toEqual({
+      metafields: [
+        {
+          ownerId: 'gid://shopify/Product/7',
+          namespace: '$app',
+          key: 'size_chart',
+          type: 'metaobject_reference',
+          value: 'chart-tee',
+        },
+      ],
+    });
+  });
+
+  it('checks nothing when the product no longer exists', async () => {
+    const { admin, mutations } = fakeAdmin({ one: null });
+    expect(await syncProducts(admin, [teeRule], { productId: 'gid://shopify/Product/404' })).toEqual({
+      checked: 0,
+      set: 0,
+      unset: 0,
+    });
+    expect(mutations()).toEqual([]);
+  });
+
+  it('sends 60 changed products as metafieldsSet batches of 25/25/10', async () => {
+    const nodes = Array.from({ length: 60 }, (_, i) => node(i));
+    const { admin, mutations } = fakeAdmin({ pages: [nodes.slice(0, 25), nodes.slice(25, 50), nodes.slice(50)] });
+    const result = await syncProducts(admin, [teeRule]);
+    expect(result).toEqual({ checked: 60, set: 60, unset: 0 });
+    const sets = mutations().filter((c) => c.query.includes('metafieldsSet'));
+    expect(sets.map((c) => (c.variables?.metafields as unknown[]).length)).toEqual([25, 25, 10]);
+  });
+
+  it('unsets products that no rule matches any more', async () => {
+    const { admin, mutations } = fakeAdmin({
+      pages: [[node(1, { productType: 'Mugs', sizeChart: { value: 'chart-tee' } })]],
+    });
+    expect(await syncProducts(admin, [teeRule])).toEqual({ checked: 1, set: 0, unset: 1 });
+    expect(mutations()).toHaveLength(1);
+    expect(mutations()[0].query).toContain('metafieldsDelete');
+    expect(mutations()[0].variables).toEqual({
+      metafields: [{ ownerId: 'gid://shopify/Product/1', namespace: '$app', key: 'size_chart' }],
+    });
+  });
+
+  it('throws AdminError carrying userErrors from a mutation', async () => {
+    const userErrors = [{ field: ['metafields', '0', 'value'], message: 'Value is invalid', code: 'INVALID' }];
+    const { admin } = fakeAdmin({ pages: [[node(1)]], mutationErrors: userErrors });
+    const err = (await syncProducts(admin, [teeRule]).catch((e) => e)) as AdminError;
+    expect(err).toBeInstanceOf(AdminError);
+    expect(err.userErrors).toEqual(userErrors);
+  });
+});
+
+// ---- runSync / claimSync with an in-memory prisma ----
+
+interface State {
+  shop: string;
+  syncRequestedAt: Date | null;
+  syncStartedAt: Date | null;
+  syncFinishedAt: Date | null;
+  syncError: string | null;
+  syncCounts: string | null;
+}
+
+type DateFilter = Date | null | { lte?: Date };
+
+function matchesDate(value: Date | null, filter: DateFilter | undefined): boolean {
+  if (filter === undefined) return true;
+  if (filter === null) return value === null;
+  if (filter instanceof Date) return value?.getTime() === filter.getTime();
+  if (filter.lte !== undefined) return value !== null && value.getTime() <= filter.lte.getTime();
+  return true;
+}
+
+function fakePrisma(rules: Rule[], initial?: Partial<State>) {
+  const states = new Map<string, State>();
+  const blank = (shop: string): State => ({
+    shop,
+    syncRequestedAt: null,
+    syncStartedAt: null,
+    syncFinishedAt: null,
+    syncError: null,
+    syncCounts: null,
+  });
+  if (initial) states.set('s.myshopify.com', { ...blank('s.myshopify.com'), ...initial });
+  const prisma = {
+    shopState: {
+      async findUnique({ where }: { where: { shop: string } }) {
+        const s = states.get(where.shop);
+        return s ? { ...s } : null;
+      },
+      async upsert({ where, create, update }: { where: { shop: string }; create: Partial<State>; update: Partial<State> }) {
+        const s = states.get(where.shop);
+        const next = s ? { ...s, ...update } : { ...blank(where.shop), ...create };
+        states.set(where.shop, next);
+        return { ...next };
+      },
+      async update({ where, data }: { where: { shop: string }; data: Partial<State> }) {
+        const s = states.get(where.shop);
+        if (!s) throw new Error('not found');
+        Object.assign(s, data);
+        return { ...s };
+      },
+      async updateMany({
+        where,
+        data,
+      }: {
+        where: { shop: string; syncStartedAt?: DateFilter; syncRequestedAt?: DateFilter };
+        data: Partial<State>;
+      }) {
+        const s = states.get(where.shop);
+        if (!s || !matchesDate(s.syncStartedAt, where.syncStartedAt) || !matchesDate(s.syncRequestedAt, where.syncRequestedAt)) {
+          return { count: 0 };
+        }
+        Object.assign(s, data);
+        return { count: 1 };
+      },
+    },
+    assignmentRule: {
+      async findMany() {
+        return rules.map((r) => ({ ...r, shop: 's.myshopify.com', label: r.value, createdAt: new Date(0) }));
+      },
+    },
+  };
+  return { prisma, states };
+}
+
+function clock(startMs = 1_000_000) {
+  let t = startMs;
+  return () => new Date((t += 1000));
+}
+
+const SHOP = 's.myshopify.com';
+
+describe('claimSync', () => {
+  it('records the request and claims when no sync has run', async () => {
+    const { prisma, states } = fakePrisma([]);
+    const deps = { prisma, getAdmin: async () => fakeAdmin().admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    const s = states.get(SHOP)!;
+    expect(s.syncRequestedAt).not.toBeNull();
+    expect(s.syncStartedAt).toEqual(s.syncRequestedAt);
+  });
+
+  it('lets only one of two concurrent requests claim', async () => {
+    const { prisma } = fakePrisma([]);
+    const deps = { prisma, getAdmin: async () => fakeAdmin().admin, now: clock() } as unknown as SyncDeps;
+    const results = await Promise.all([claimSync(SHOP, deps), claimSync(SHOP, deps)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('does not claim while a recent sync is unfinished, but records the request', async () => {
+    const now = clock();
+    const started = now();
+    const { prisma, states } = fakePrisma([], { syncStartedAt: started, syncRequestedAt: started });
+    const deps = { prisma, getAdmin: async () => fakeAdmin().admin, now } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(false);
+    expect(states.get(SHOP)!.syncRequestedAt!.getTime()).toBeGreaterThan(started.getTime());
+  });
+
+  it('claims again when the running sync is older than 10 minutes', async () => {
+    const started = new Date(0);
+    const { prisma } = fakePrisma([], { syncStartedAt: started });
+    const deps = { prisma, getAdmin: async () => fakeAdmin().admin, now: clock(11 * 60_000) } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+  });
+
+  it('claims again after the previous sync finished', async () => {
+    const now = clock();
+    const started = now();
+    const { prisma } = fakePrisma([], { syncStartedAt: started, syncFinishedAt: now() });
+    const deps = { prisma, getAdmin: async () => fakeAdmin().admin, now } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+  });
+});
+
+describe('runSync', () => {
+  it('syncs with the shop rules and records counts', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    const { admin } = fakeAdmin({ pages: [[node(1), node(2, { sizeChart: { value: 'chart-tee' } })]] });
+    const deps = { prisma, getAdmin: async () => admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    const s = states.get(SHOP)!;
+    expect(JSON.parse(s.syncCounts!)).toEqual({ checked: 2, set: 1, unset: 0 });
+    expect(s.syncError).toBeNull();
+    expect(s.syncFinishedAt!.getTime()).toBeGreaterThanOrEqual(s.syncStartedAt!.getTime());
+  });
+
+  it('reruns when a request arrives while it is running', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    const fake = fakeAdmin();
+    const now = clock();
+    let productFetches = 0;
+    const admin: AdminClient = {
+      async graphql(query, options) {
+        if (query.includes('query ProductFacts')) {
+          productFetches++;
+          // A second request lands while the first pass is fetching products.
+          if (productFetches === 1) states.get(SHOP)!.syncRequestedAt = now();
+          return new Response(
+            JSON.stringify({
+              data: {
+                products: {
+                  nodes: [node(1, { sizeChart: { value: 'chart-tee' } })],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              },
+            }),
+          );
+        }
+        return fake.admin.graphql(query, options);
+      },
+    };
+    const deps = { prisma, getAdmin: async () => admin, now } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(productFetches).toBe(2);
+    expect(states.get(SHOP)!.syncFinishedAt).not.toBeNull();
+  });
+
+  it('records the error and finishes so a later request can start a new sync', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    const deps = {
+      prisma,
+      getAdmin: async () => {
+        throw new Error('no session');
+      },
+      now: clock(),
+    } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    const s = states.get(SHOP)!;
+    expect(s.syncError).toBe('no session');
+    expect(s.syncFinishedAt).not.toBeNull();
+    expect(await claimSync(SHOP, deps)).toBe(true);
+  });
+});
