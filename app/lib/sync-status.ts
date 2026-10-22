@@ -26,11 +26,11 @@ function parseCounts(raw: string | null): { set: number; unset: number } {
 /** What the assignments page says about the last product sync. */
 export function syncStatus(state: SyncStateInput | null, now: Date): SyncStatus {
   if (!state) return { kind: 'never' };
-  if (state.syncError) return { kind: 'error', message: state.syncError };
   const { syncStartedAt: started, syncFinishedAt: finished } = state;
   if (started && (!finished || started > finished)) {
     return now.getTime() - started.getTime() < STALL_MS ? { kind: 'syncing' } : { kind: 'stalled' };
   }
+  if (state.syncError) return { kind: 'error', message: state.syncError };
   if (finished) return { kind: 'done', finishedAt: finished, ...parseCounts(state.syncCounts) };
   return { kind: 'never' };
 }

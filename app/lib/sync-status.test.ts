@@ -28,8 +28,11 @@ describe('syncStatus', () => {
     expect(syncStatus(done, now)).toEqual({ kind: 'done', finishedAt: ago(5), set: 3, unset: 2 });
     expect(syncStatus({ ...done, syncCounts: 'x' }, now)).toMatchObject({ kind: 'done', set: 0, unset: 0 });
   });
-  it('error wins', () => {
-    expect(syncStatus(state({ syncError: 'boom', syncStartedAt: ago(1) }), now)).toEqual({ kind: 'error', message: 'boom' });
+  it('a running sync hides a stale error', () => {
+    expect(syncStatus(state({ syncError: 'boom', syncStartedAt: ago(1), syncFinishedAt: ago(30) }), now)).toEqual({ kind: 'syncing' });
+  });
+  it('error shows when the last pass finished after it started', () => {
+    expect(syncStatus(state({ syncError: 'boom', syncStartedAt: ago(6), syncFinishedAt: ago(5) }), now)).toEqual({ kind: 'error', message: 'boom' });
   });
 });
 
