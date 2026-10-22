@@ -48,7 +48,14 @@ function splitRows(text: string): string[][] | { error: string } {
     // A row that is just "52,5" is a decimal, not two cells.
     return { error: NO_SPLIT };
   }
-  return lines.map((l) => l.split(delim).map((c) => c.replace(QUOTES, '').trim()));
+  return lines.map((l) => dropTrailingEmpty(l.split(delim).map((c) => c.replace(QUOTES, '').trim())));
+}
+
+/** Spreadsheet CSV exports end rows with empty cells ("S,52,"); they are not columns. */
+function dropTrailingEmpty(cells: string[]): string[] {
+  let end = cells.length;
+  while (end > 0 && cells[end - 1] === '') end--;
+  return cells.slice(0, end);
 }
 
 /** number, null for blank, undefined when unreadable. */

@@ -82,6 +82,18 @@ describe('parsePastedTable', () => {
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/columns apart/i) });
   });
 
+  it('ignores trailing separators that spreadsheet CSV exports add', () => {
+    const r = parsePastedTable('Size,Chest,\nS,52,\nM,55,\r\n');
+    expect(r).toEqual({ ok: true, table: { sizes: ['S', 'M'], measurements: { chest: [52, 55] } }, ignored: [] });
+    const rowsOnly = parsePastedTable('Size,Chest\nS,52,\nM,55,,');
+    expect(rowsOnly).toEqual({ ok: true, table: { sizes: ['S', 'M'], measurements: { chest: [52, 55] } }, ignored: [] });
+  });
+
+  it('still errors on a decimal comma when the header has a trailing separator', () => {
+    const r = parsePastedTable('Size,Chest,\nS,52,5\nM,55,');
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/columns apart/i) });
+  });
+
   it('errors on lines that are just a decimal comma', () => {
     const r = parsePastedTable('Size\n52,5\n55,5');
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/columns apart/i) });

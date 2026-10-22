@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { redirect, useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { TEMPLATES } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
@@ -33,7 +33,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
 
@@ -42,7 +42,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!template) return { error: "That template does not exist." };
     const result = await saveChart(admin, draftFromTemplate(template));
     if (!result.ok) return { error: result.errors.join(" ") };
-    return redirect(`/app/charts/${result.draft.handle}`);
+    return await redirect(`/app/charts/${result.draft.handle}`);
   }
 
   if (intent === "delete") {
