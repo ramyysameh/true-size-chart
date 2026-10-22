@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { AdminError, gql, type AdminClient } from './admin.server';
+import { listCharts } from './charts.server';
 import { planWrites, type ProductFacts, type Rule, type RuleType } from './rules';
 
 const PRODUCT_FACTS = `#graphql
@@ -90,12 +91,6 @@ export async function fetchAllFacts(admin: AdminClient): Promise<ProductFacts[]>
   }
 }
 
-function throwOnUserErrors(userErrors: UserError[] | undefined) {
-  if (userErrors?.length) {
-    throw new AdminError(userErrors.map((e) => e.message).join('; '), userErrors);
-  }
-}
-
 /**
  * Brings the `$app.size_chart` metafield of every product (or just `opts.productId`) in line with the rules.
  * Idempotent: products whose metafield already holds the resolved chart are not written.
@@ -114,6 +109,11 @@ export async function syncProducts(
   }
 
   const { set, unset } = planWrites(products, rules);
+  // Each batch stands alone: a userError in one batch (metafieldsSet is atomic per call) must not
+  // stop the others. Counts reflect successful batches only; all userErrors are thrown at the end.
+  const userErrors: UserError[] = [];
+  let setCount = 0;
+  let unsetCount = 0;
 
   for (let i = 0; i < set.length; i += BATCH) {
     const metafields = set.slice(i, i + BATCH).map((w) => ({
@@ -124,7 +124,8 @@ export async function syncProducts(
       value: w.chartId,
     }));
     const data = await gql<{ metafieldsSet: { userErrors: UserError[] } }>(admin, ASSIGN_CHARTS, { metafields });
-    throwOnUserErrors(data.metafieldsSet.userErrors);
+    if (data.metafieldsSet.userErrors.length) userErrors.push(...data.metafieldsSet.userErrors);
+    else setCount += metafields.length;
   }
 
   for (let i = 0; i < unset.length; i += BATCH) {
@@ -134,10 +135,14 @@ export async function syncProducts(
     const data = await gql<{ metafieldsDelete: { userErrors: UserError[] } }>(admin, UNASSIGN_CHARTS, {
       metafields,
     });
-    throwOnUserErrors(data.metafieldsDelete.userErrors);
+    if (data.metafieldsDelete.userErrors.length) userErrors.push(...data.metafieldsDelete.userErrors);
+    else unsetCount += metafields.length;
   }
 
-  return { checked: products.length, set: set.length, unset: unset.length };
+  if (userErrors.length) {
+    throw new AdminError(userErrors.map((e) => e.message).join('; '), userErrors);
+  }
+  return { checked: products.length, set: setCount, unset: unsetCount };
 }
 
 // ---- Background sync ----
@@ -190,18 +195,49 @@ export async function claimSync(shop: string, deps: SyncDeps): Promise<boolean> 
   return claimed.count === 1;
 }
 
+/** One pass: current rules, minus rules whose chart no longer exists, applied to every product. */
+async function syncPass(shop: string, deps: SyncDeps) {
+  const rules = await loadRules(deps.prisma, shop);
+  const admin = await deps.getAdmin(shop);
+  const chartIds = new Set((await listCharts(admin)).map((d) => d.id));
+  // A rule left behind by a deleted chart must never write a reference to a missing metaobject.
+  const live = rules.filter((r) => chartIds.has(r.chartId));
+  return syncProducts(admin, live);
+}
+
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 /**
- * The sync loop, run by whoever won `claimSync`. Each pass loads the rules and syncs every product;
- * a pass is repeated while a request arrived after it started. Never rejects: failures land in `syncError`.
+ * The sync loop, run by whoever won `claimSync`. A pass is repeated while a request arrived after it
+ * started. After a failed pass with a request pending, one more pass runs (at most one in a row), so a
+ * persistent error cannot loop. `syncError` holds the last failure only when the final pass failed.
+ * Never rejects.
  */
 export async function runSync(shop: string, deps: SyncDeps): Promise<void> {
+  let retriedAfterError = false;
   try {
     for (;;) {
       const startedAt = deps.now();
       await deps.prisma.shopState.update({ where: { shop }, data: { syncStartedAt: startedAt } });
-      const rules = await loadRules(deps.prisma, shop);
-      const admin = await deps.getAdmin(shop);
-      const counts = await syncProducts(admin, rules);
+      let counts: Awaited<ReturnType<typeof syncProducts>>;
+      try {
+        counts = await syncPass(shop, deps);
+      } catch (error) {
+        const data = { syncFinishedAt: deps.now(), syncError: errorMessage(error) };
+        if (retriedAfterError) {
+          await deps.prisma.shopState.update({ where: { shop }, data });
+          return;
+        }
+        // Finish unless a request arrived during the failed pass; then give it one retry pass.
+        const finished = await deps.prisma.shopState.updateMany({
+          where: { shop, syncRequestedAt: { lte: startedAt } },
+          data,
+        });
+        if (finished.count === 1) return;
+        retriedAfterError = true;
+        continue;
+      }
+      retriedAfterError = false;
       // Finish only if no request arrived after this pass started; otherwise run another pass.
       const finished = await deps.prisma.shopState.updateMany({
         where: { shop, syncRequestedAt: { lte: startedAt } },
@@ -210,7 +246,8 @@ export async function runSync(shop: string, deps: SyncDeps): Promise<void> {
       if (finished.count === 1) return;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    // Only the state bookkeeping itself can land here.
+    const message = errorMessage(error);
     try {
       await deps.prisma.shopState.update({
         where: { shop },

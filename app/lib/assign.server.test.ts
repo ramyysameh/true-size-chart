@@ -1,6 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminError, type AdminClient } from './admin.server';
-import { claimSync, fetchAllFacts, runSync, syncProducts, toFacts, type SyncDeps } from './assign.server';
+import {
+  claimSync,
+  fetchAllFacts,
+  requestSync,
+  runSync,
+  syncProducts,
+  toFacts,
+  type SyncDeps,
+} from './assign.server';
+
+// requestSync wires the real deps through dynamic imports; these mocks stand in for them.
+const real = vi.hoisted(() => ({
+  prisma: null as unknown,
+  admin: vi.fn<(shop: string) => Promise<{ admin: unknown }>>(),
+}));
+vi.mock('../db.server', () => ({
+  get default() {
+    return real.prisma;
+  },
+}));
+vi.mock('../shopify.server', () => ({ unauthenticated: { admin: real.admin } }));
 import type { Rule } from './rules';
 
 interface Call {
@@ -23,9 +43,23 @@ function node(i: number, over: Record<string, unknown> = {}) {
 }
 
 /** Fake Admin API: serves product pages for ProductFacts, one product for OneProductFacts, ok for mutations. */
-function fakeAdmin(opts: { pages?: unknown[][]; one?: unknown; mutationErrors?: unknown[] } = {}) {
+function fakeAdmin(
+  opts: {
+    pages?: unknown[][];
+    one?: unknown;
+    /** userErrors for the n-th mutation call (0-based); an array applies to every mutation. */
+    mutationErrors?: unknown[] | ((n: number) => unknown[]);
+    chartIds?: string[];
+  } = {},
+) {
   const calls: Call[] = [];
   let page = 0;
+  let mutationNo = 0;
+  const errorsFor = () => {
+    const n = mutationNo++;
+    const e = opts.mutationErrors;
+    return typeof e === 'function' ? e(n) : (e ?? []);
+  };
   const admin: AdminClient = {
     async graphql(query, options) {
       calls.push({ query, variables: options?.variables });
@@ -42,10 +76,17 @@ function fakeAdmin(opts: { pages?: unknown[][]; one?: unknown; mutationErrors?: 
         };
       } else if (query.includes('query OneProductFacts')) {
         data = { product: opts.one ?? null };
+      } else if (query.includes('query Charts')) {
+        data = {
+          metaobjects: {
+            nodes: (opts.chartIds ?? ['chart-tee']).map((id) => ({ id, handle: id, updatedAt: '', fields: [] })),
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        };
       } else if (query.includes('mutation AssignCharts')) {
-        data = { metafieldsSet: { metafields: [], userErrors: opts.mutationErrors ?? [] } };
+        data = { metafieldsSet: { metafields: [], userErrors: errorsFor() } };
       } else if (query.includes('mutation UnassignCharts')) {
-        data = { metafieldsDelete: { deletedMetafields: [], userErrors: opts.mutationErrors ?? [] } };
+        data = { metafieldsDelete: { deletedMetafields: [], userErrors: errorsFor() } };
       } else {
         throw new Error(`unexpected query ${query}`);
       }
@@ -152,6 +193,30 @@ describe('syncProducts', () => {
     const err = (await syncProducts(admin, [teeRule]).catch((e) => e)) as AdminError;
     expect(err).toBeInstanceOf(AdminError);
     expect(err.userErrors).toEqual(userErrors);
+  });
+});
+
+describe('syncProducts batch failures', () => {
+  it('runs every set and unset batch after a failing one, then throws all userErrors', async () => {
+    const nodes = [
+      ...Array.from({ length: 60 }, (_, i) => node(i)),
+      node(100, { productType: 'Mugs', sizeChart: { value: 'chart-tee' } }),
+    ];
+    const userErrors = [{ field: ['metafields', '0', 'value'], message: 'Metaobject does not exist', code: 'INVALID' }];
+    const { admin, mutations } = fakeAdmin({
+      pages: [nodes],
+      mutationErrors: (n) => (n === 0 ? userErrors : []),
+    });
+    const err = (await syncProducts(admin, [teeRule]).catch((e) => e)) as AdminError;
+    expect(err).toBeInstanceOf(AdminError);
+    expect(err.userErrors).toEqual(userErrors);
+    const sent = mutations();
+    expect(sent.map((c) => (c.query.includes('metafieldsSet') ? 'set' : 'unset'))).toEqual([
+      'set',
+      'set',
+      'set',
+      'unset',
+    ]);
   });
 });
 
@@ -338,5 +403,142 @@ describe('runSync', () => {
     expect(s.syncError).toBe('no session');
     expect(s.syncFinishedAt).not.toBeNull();
     expect(await claimSync(SHOP, deps)).toBe(true);
+  });
+});
+
+describe('runSync after a failed pass', () => {
+  it('runs one more pass when a request arrived during the failed one, and clears the error', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    const { admin } = fakeAdmin({ pages: [[node(1)]] });
+    const now = clock();
+    let calls = 0;
+    const deps = {
+      prisma,
+      now,
+      getAdmin: async () => {
+        calls++;
+        if (calls === 1) {
+          states.get(SHOP)!.syncRequestedAt = now();
+          throw new Error('Metaobject does not exist');
+        }
+        return admin;
+      },
+    } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(calls).toBe(2);
+    const s = states.get(SHOP)!;
+    expect(s.syncError).toBeNull();
+    expect(JSON.parse(s.syncCounts!)).toEqual({ checked: 1, set: 1, unset: 0 });
+  });
+
+  it('retries a persistent error exactly once, then stops with syncError set', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    const now = clock();
+    let calls = 0;
+    const deps = {
+      prisma,
+      now,
+      getAdmin: async () => {
+        calls++;
+        states.get(SHOP)!.syncRequestedAt = now(); // a request is always pending
+        throw new Error(`boom ${calls}`);
+      },
+    } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(calls).toBe(2);
+    const s = states.get(SHOP)!;
+    expect(s.syncError).toBe('boom 2');
+    expect(s.syncFinishedAt).not.toBeNull();
+  });
+
+  it('does not retry a failed pass when no request is pending', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    let calls = 0;
+    const deps = {
+      prisma,
+      now: clock(),
+      getAdmin: async () => {
+        calls++;
+        throw new Error('boom');
+      },
+    } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    expect(calls).toBe(1);
+    expect(states.get(SHOP)!.syncError).toBe('boom');
+  });
+});
+
+describe('runSync with a rule whose chart was deleted', () => {
+  it('skips the rule, so no metafield points at the missing metaobject', async () => {
+    const gone: Rule = { id: 'r0', chartId: 'chart-gone', type: 'product_type', value: 'tees', priority: 0 };
+    const { prisma, states } = fakePrisma([gone, { ...teeRule, priority: 1 }]);
+    const { admin, mutations } = fakeAdmin({ pages: [[node(1)]], chartIds: ['chart-tee'] });
+    const deps = { prisma, getAdmin: async () => admin, now: clock() } as unknown as SyncDeps;
+    expect(await claimSync(SHOP, deps)).toBe(true);
+    await runSync(SHOP, deps);
+    const values = mutations().flatMap((c) =>
+      (c.variables?.metafields as { value?: string }[]).map((m) => m.value),
+    );
+    expect(values).toEqual(['chart-tee']);
+    expect(values).not.toContain('chart-gone');
+    expect(states.get(SHOP)!.syncError).toBeNull();
+  });
+});
+
+describe('requestSync', () => {
+  afterEach(() => {
+    real.admin.mockReset();
+    real.prisma = null;
+  });
+
+  it('returns before the background loop finishes, which then completes', async () => {
+    const { prisma, states } = fakePrisma([teeRule]);
+    real.prisma = prisma;
+    const { admin } = fakeAdmin({ pages: [[node(1)]] });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    real.admin.mockImplementation(async () => {
+      await gate;
+      return { admin };
+    });
+
+    await requestSync(SHOP);
+    expect(states.get(SHOP)!.syncStartedAt).not.toBeNull();
+    expect(states.get(SHOP)!.syncFinishedAt).toBeNull();
+
+    release();
+    await vi.waitFor(() => expect(states.get(SHOP)!.syncFinishedAt).not.toBeNull());
+    expect(JSON.parse(states.get(SHOP)!.syncCounts!)).toEqual({ checked: 1, set: 1, unset: 0 });
+  });
+
+  it('does not leave an unhandled rejection when the loop and its error bookkeeping both fail', async () => {
+    const { prisma } = fakePrisma([teeRule]);
+    real.prisma = prisma;
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      real.admin.mockImplementation(async () => {
+        // Break the bookkeeping too, so runSync's own error recording fails.
+        prisma.shopState.update = async () => {
+          throw new Error('db down');
+        };
+        prisma.shopState.updateMany = async () => {
+          throw new Error('db down');
+        };
+        throw new Error('no offline session');
+      });
+      await requestSync(SHOP);
+      await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+      consoleError.mockRestore();
+    }
   });
 });
