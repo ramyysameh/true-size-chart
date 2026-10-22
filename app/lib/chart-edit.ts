@@ -1,5 +1,5 @@
 import { DIMS, type ChartTable, type Dim } from '@true-size-chart/engine';
-import { norm } from './chart-model';
+import { norm, type ChartDraft } from './chart-model';
 
 function clone(t: ChartTable): ChartTable {
   const measurements: ChartTable['measurements'] = {};
@@ -74,4 +74,33 @@ export function setCell(t: ChartTable, dim: Dim, index: number, text: string): C
 
 export function cellText(v: number | null | undefined): string {
   return v === null || v === undefined ? '' : String(v);
+}
+
+/** Stable serialization of a draft for dirty checks: key order and alias order never matter. */
+export function draftKey(d: ChartDraft): string {
+  const measurements: Record<string, (number | null)[]> = {};
+  for (const dim of DIMS) {
+    const col = d.table.measurements[dim];
+    if (col) measurements[dim] = col;
+  }
+  const aliases = Object.entries(d.table.aliases ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify([
+    d.name, d.category, d.audience, d.unit, d.basis, d.intendedFit, d.howToMeasure,
+    d.table.sizes, measurements, aliases,
+  ]);
+}
+
+/** Parses the posted draft; null unless it is an object with a usable table. */
+export function parseDraftBody(raw: string): ChartDraft | null {
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const t = (v as { table?: unknown }).table;
+    if (!t || typeof t !== 'object') return null;
+    const table = t as { sizes?: unknown; measurements?: unknown };
+    if (!Array.isArray(table.sizes) || !table.measurements || typeof table.measurements !== 'object') return null;
+    return v as ChartDraft;
+  } catch {
+    return null;
+  }
 }

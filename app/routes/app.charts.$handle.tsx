@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { redirect, useFetcher, useLoaderData } from "react-router";
+import { redirect, useFetcher, useLoaderData, useParams, useSearchParams } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { TEMPLATES, type Dim } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
@@ -17,6 +18,8 @@ import {
   addSize,
   availableDims,
   cellText,
+  draftKey,
+  parseDraftBody,
   removeDim,
   removeSize,
   setCell,
@@ -74,12 +77,8 @@ type ActionResult = { saved: boolean; errors: string[]; draft?: ChartDraft };
 export const action = async ({ request, params }: ActionFunctionArgs): Promise<ActionResult | Response> => {
   const { admin } = await authenticate.admin(request);
   const form = await request.formData();
-  let draft: ChartDraft;
-  try {
-    draft = JSON.parse(String(form.get("draft") ?? "")) as ChartDraft;
-  } catch {
-    return { saved: false, errors: ["The chart could not be read. Reload the page and try again."] };
-  }
+  let draft = parseDraftBody(String(form.get("draft") ?? ""));
+  if (!draft) return { saved: false, errors: ["The chart could not be read. Reload the page and try again."] };
   // The route decides which chart this is; the client cannot retarget a save.
   if (params.handle === "new") draft = { ...draft, id: null, handle: null };
   else draft = { ...draft, handle: params.handle ?? null };
@@ -90,7 +89,16 @@ export const action = async ({ request, params }: ActionFunctionArgs): Promise<A
   return { saved: true, errors: [], draft: result.draft };
 };
 
-export default function ChartEditor() {
+export default function ChartEditorRoute() {
+  const { handle } = useParams();
+  const [search] = useSearchParams();
+  // Re-seed the draft when navigating between charts or templates.
+  return <ChartEditor key={`${handle}:${search.get("template") ?? ""}`} />;
+}
+
+function ChartEditor() {
+  const shopify = useAppBridge();
+  const { handle } = useParams();
   const { draft: loaded } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const [draft, setDraft] = useState<ChartDraft>(loaded);
@@ -104,6 +112,20 @@ export default function ChartEditor() {
   const serverErrors = result?.errors ?? [];
   const justSaved = result?.saved === true && !saving;
   const { warnings } = validateDraft(draft);
+  const dirty = handle === "new" || draftKey(draft) !== draftKey(loaded);
+
+  const save = () => {
+    if (saving) return;
+    fetcher.submit({ draft: JSON.stringify(draft) }, { method: "post" });
+  };
+  const discard = () => {
+    setDraft(loaded);
+    setPasteNote(null);
+  };
+
+  useEffect(() => {
+    void (dirty ? shopify.saveBar.show("chart-save-bar") : shopify.saveBar.hide("chart-save-bar"));
+  }, [dirty, shopify]);
 
   const update = (patch: Partial<ChartDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const updateTable = (fn: (t: ChartDraft["table"]) => ChartDraft["table"]) =>
@@ -131,15 +153,20 @@ export default function ChartEditor() {
         Size charts
       </s-link>
 
+      <ui-save-bar id="chart-save-bar">
+        <button variant="primary" onClick={save}>
+          Save
+        </button>
+        <button onClick={discard}>Discard</button>
+      </ui-save-bar>
+      <s-button slot="primary-action" variant="primary" disabled={!dirty || saving} loading={saving} onClick={save}>
+        Save
+      </s-button>
+
       <form
-        data-save-bar
         onSubmit={(e) => {
           e.preventDefault();
-          fetcher.submit({ draft: JSON.stringify(draft) }, { method: "post" });
-        }}
-        onReset={() => {
-          setDraft(loaded);
-          setPasteNote(null);
+          save();
         }}
       >
         <s-grid gridTemplateColumns="@container (inline-size > 1000px) 2fr 1fr, 1fr" gap="base">
