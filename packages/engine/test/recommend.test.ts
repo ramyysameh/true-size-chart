@@ -22,7 +22,7 @@ const cmCirc: ChartInput = {
   intendedFit: 'regular',
 };
 
-const body: BodyEstimate = { chest: 100, waist: 90, hip: 100, inseam: 80, heightCm: 180 };
+const body: BodyEstimate = { chest: 100, waist: 90, hip: 100, inseam: 80, heightCm: 180, sex: 'male' };
 
 describe('targetFor', () => {
   it('adds regular tops ease to chest and derives length from height', () => {
@@ -45,12 +45,16 @@ describe('targetFor', () => {
 
   it('targets waist, hip and inseam for pants and no inseam for shorts', () => {
     const pants = targetFor(body, { ...cmCirc, basis: 'garment', category: 'pants', measurements: {} }, 'regular');
-    expect(pants.waist).toBeCloseTo(91.8, 9);
-    expect(pants.hip).toBeCloseTo(108, 9);
+    expect(pants.waist).toBeCloseTo(88.2, 9);
+    expect(pants.hip).toBeCloseTo(101, 9);
     expect(pants.inseam).toBe(80);
     expect(pants.chest).toBeUndefined();
     const shorts = targetFor(body, { ...cmCirc, basis: 'garment', category: 'shorts', measurements: {} }, 'regular');
     expect(shorts.inseam).toBeUndefined();
+    const forWoman = (category: 'pants' | 'tshirt') =>
+      targetFor({ ...body, sex: 'female' }, { ...cmCirc, basis: 'garment', category, measurements: {} }, 'regular');
+    expect(forWoman('pants').waist).toBeCloseTo(90 * 0.95 * 0.98, 9);
+    expect(forWoman('tshirt').waist).toBeCloseTo(104.4, 9); // the waistband factor is bottoms-only
   });
 });
 

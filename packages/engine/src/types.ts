@@ -7,6 +7,8 @@ export type Dim = 'chest' | 'waist' | 'hip' | 'length' | 'inseam';
 export interface ChartTable {
   sizes: string[];
   measurements: Partial<Record<Dim, (number | null)[]>>;
+  /** Storefront only: a variant's size option value (trimmed, lower-cased) to a chart size label. */
+  aliases?: Record<string, string>;
 }
 
 export interface ChartInput extends ChartTable {

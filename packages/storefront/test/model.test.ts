@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TSHIRT_UNISEX, recommend, type ChartInput, type ShopperProfile } from '@true-size-chart/engine';
+import { TEMPLATE_CHARTS, TSHIRT_UNISEX, recommend, type ChartInput, type ShopperProfile } from '@true-size-chart/engine';
 import { defaultDraft, finalRecommendation, liveEstimate, toProfile, type Draft } from '../src/model';
 import type { StoredProfile } from '../src/profile-store';
 import { CONFIG } from './fixtures/config';
@@ -92,8 +92,10 @@ describe('finalRecommendation', () => {
     expect(finalRecommendation(MALE_180, SMALL_RUNNING).fitNote).toBe('runs_small');
   });
 
-  it('has no reference for categories without a template', () => {
-    expect(finalRecommendation(MALE_180, { ...SMALL_RUNNING, category: 'shirt' }).fitNote).toBe('true_to_size');
+  it('compares against the template for the config audience', () => {
+    const women = TEMPLATE_CHARTS['tshirt-women']!;
+    expect(finalRecommendation(MALE_180, women, 'women').fitNote).toBe('true_to_size');
+    expect(finalRecommendation(MALE_180, women, 'unisex').fitNote).not.toBe('true_to_size');
   });
 
   it('throws on an unusable chart', () => {

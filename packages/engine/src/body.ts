@@ -1,5 +1,5 @@
 import { COEFFS, type BodyDim } from './coefficients';
-import type { ShapeStep, ShopperProfile } from './types';
+import type { Sex, ShapeStep, ShopperProfile } from './types';
 
 export interface BodyEstimate {
   chest: number;
@@ -7,6 +7,7 @@ export interface BodyEstimate {
   hip: number;
   inseam: number;
   heightCm: number;
+  sex: Sex;
 }
 
 const SHAPE_STEP = 0.05;
@@ -26,5 +27,6 @@ export function estimateBody(p: ShopperProfile): BodyEstimate {
     hip: adjust(predict('hip'), p.shape.hips),
     inseam: predict('inseam'),
     heightCm: p.heightCm,
+    sex: p.sex,
   };
 }

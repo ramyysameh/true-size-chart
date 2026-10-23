@@ -167,3 +167,30 @@ describe('isOffered', () => {
     expect(isOffered({ ...CONFIG, sizeOptionIndex: null }, 'M')).toBe(false);
   });
 });
+
+describe('size aliases', () => {
+  const named = (aliases?: Record<string, string>): FinderConfig => ({
+    ...CONFIG,
+    chart: { ...CONFIG.chart, table: { ...CONFIG.chart.table, aliases } },
+    variants: [
+      { id: 1, available: true, options: ['Black', 'Small'] },
+      { id: 2, available: true, options: ['Black', ' Medium '] },
+      { id: 3, available: true, options: ['Black', 'Large'] },
+    ],
+  });
+  const aliases = { small: 'S', medium: 'M', large: 'L' };
+
+  it('matches a variant option through the chart aliases', () => {
+    expect(variantForSize(named(aliases), 'M', 2)?.id).toBe(2);
+    expect(isOffered(named(aliases), 'L')).toBe(true);
+  });
+
+  it('matches nothing without aliases', () => {
+    expect(variantForSize(named(), 'M', 1)).toBeNull();
+  });
+
+  it('an alias to a size that is not in the chart matches nothing', () => {
+    expect(variantForSize(named({ small: 'XXS' }), 'S', 2)).toBeNull();
+    expect(isOffered(named({ small: 'XXS' }), 'S')).toBe(false);
+  });
+});

@@ -7,3 +7,5 @@ export * from './score';
 export * from './recommend';
 export * from './templates/tshirt';
 export * from './profile';
+export * from './templates/charts';
+export * from './templates/copy';

@@ -36,6 +36,10 @@ export function boot(doc: Document, win: Window): void {
   paint();
   // The theme editor (and some themes on variant change) re-render the section with the default label.
   doc.addEventListener('shopify:section:load', paint);
+  // Section Rendering API re-renders (e.g. a variant change) replace the button with its default label.
+  new win.MutationObserver((records) => {
+    if (records.some((r) => [...r.addedNodes].some((n) => (n as Element).matches?.(OPENER) || (n as Element).querySelector?.(OPENER)))) paint();
+  }).observe(doc.body, { childList: true, subtree: true });
 
   const add = (tag: string, props: object) => doc.head.appendChild(Object.assign(doc.createElement(tag), props));
   let loading = false;
