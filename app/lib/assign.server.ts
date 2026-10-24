@@ -86,8 +86,11 @@ export async function fetchAllFacts(admin: AdminClient): Promise<ProductFacts[]>
       products: { nodes: unknown[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
     } = await gql(admin, PRODUCT_FACTS, { after });
     facts.push(...data.products.nodes.map(toFacts));
-    if (!data.products.pageInfo.hasNextPage) return facts;
-    after = data.products.pageInfo.endCursor;
+    const { hasNextPage, endCursor } = data.products.pageInfo;
+    if (!hasNextPage) return facts;
+    // A partial list would make the sync unset products that were never fetched.
+    if (!endCursor) throw new AdminError('The product list came back incomplete (next page without a cursor).');
+    after = endCursor;
   }
 }
 
