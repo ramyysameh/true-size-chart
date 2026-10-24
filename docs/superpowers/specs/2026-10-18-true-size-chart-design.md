@@ -118,7 +118,11 @@ Inputs: `sex, heightCm, weightKg, shape {chest, stomach, hips ∈ -1|0|1}, fitPr
 
 Golden tests lock the behavior, including the video's observations under the default T-shirt template: male 180/89 → L; 186/92 → XL; 186/40 → S. (Exact boundaries come from the fitted coefficients; the tests protect against regressions, not the video's exact numbers.)
 
-## 7. Plans (Shopify App Pricing) **[my call, needs user confirmation]**
+## 7. Plans (Shopify App Pricing)
+
+> **Decided by the user on 2026-10-24 [user]:** one plan, Pro, at $9.99 every 30 days or $99 yearly, with a 14-day trial. There is no Free plan: a shop without an active subscription gets the plan page in the admin and nothing on the storefront. There is no "Powered by True" link. Plus waits for v2 AI import. Dev stores in the Partner org select Pro at no charge. See Plan 4. The draft table below is superseded.
+
+### Original draft **[my call, superseded]**
 
 | Plan | Price | Includes |
 |---|---|---|
