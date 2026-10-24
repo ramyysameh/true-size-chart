@@ -47,16 +47,24 @@ model AssignmentRule {
 }
 
 model ShopState {
-  shop            String    @id
-  onboardedAt     DateTime?
-  sizeOptionNames String    @default("Size")
-  syncRequestedAt DateTime?
-  syncStartedAt   DateTime?
-  syncFinishedAt  DateTime?
-  syncError       String?
-  syncCounts      String?   // JSON {checked,set,unset}
-  rulesManaged    Boolean   @default(false) // set on the first rule insert: from then on, no rules = unset every product
-  timezone        String?   // shop.ianaTimezone (written by Task 3); events count in UTC until known
+  shop                 String    @id
+  onboardedAt          DateTime?
+  sizeOptionNames      String    @default("Size")
+  syncRequestedAt      DateTime?
+  syncStartedAt        DateTime?
+  syncFinishedAt       DateTime?
+  syncError            String?
+  syncCounts           String? // JSON {checked,set,unset}
+  rulesManaged         Boolean   @default(false) // set on the first rule insert: from then on, no rules = unset every product
+  timezone             String? // shop.ianaTimezone (written by Task 3); events count in UTC until known
+  shopGid              String? // gid://shopify/Shop/…
+  installationId       String? // currentAppInstallation.id
+  planHandle           String? // spec §5; activeSubscription.items[0].handle
+  billingPeriod        String? // e.g. EVERY_30_DAYS, ANNUAL
+  trialEndsAt          DateTime?
+  entitled             Boolean   @default(false)
+  entitlementCheckedAt DateTime? // last confirmed Partner answer
+  entitlementWritten   Boolean? // last value written to tsc.active (null = never)
 }
 
 // Storefront finder counters, one row per chart and shop-local day. Incremented at write time.
