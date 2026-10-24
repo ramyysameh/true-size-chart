@@ -31,6 +31,7 @@ export default function App() {
         <s-link href="/app/charts">Charts</s-link>
         <s-link href="/app/rules">Assignments</s-link>
         <s-link href="/app/mapping">Size mapping</s-link>
+        <s-link href="/app/analytics">Analytics</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>
