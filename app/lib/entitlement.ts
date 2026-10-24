@@ -29,6 +29,12 @@ export function planPageUrl(shopDomain: string, appHandle: string): string {
   return `https://admin.shopify.com/store/${store}/charges/${appHandle}/pricing_plans`;
 }
 
+/** The app's handle in its Shopify admin URLs. */
+export function appHandle(): string {
+  // eslint-disable-next-line no-undef
+  return process.env.SHOPIFY_APP_HANDLE ?? 'true-size-chart';
+}
+
 function confirmedWithin(state: EntitlementState, now: Date, windowMs: number): boolean {
   if (!state.entitled || !state.entitlementCheckedAt) return false;
   return now.getTime() - state.entitlementCheckedAt.getTime() < windowMs;

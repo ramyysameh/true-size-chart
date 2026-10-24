@@ -4,7 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
-import { planPageUrl } from "../lib/entitlement";
+import { appHandle, planPageUrl } from "../lib/entitlement";
 import { checkEntitlement } from "../lib/entitlement.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -14,9 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const fresh = new URL(request.url).searchParams.has("plan_handle");
   const entitlement = await checkEntitlement(admin, session.shop, { fresh });
   if (!entitlement.active) {
-    // eslint-disable-next-line no-undef
-    const appHandle = process.env.SHOPIFY_APP_HANDLE ?? "true-size-chart";
-    return redirect(planPageUrl(session.shop, appHandle), { target: "_top" });
+    return redirect(planPageUrl(session.shop, appHandle()), { target: "_top" });
   }
 
   // eslint-disable-next-line no-undef
