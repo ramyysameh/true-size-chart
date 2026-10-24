@@ -1,5 +1,6 @@
 import { ChartError, recommend } from '@true-size-chart/engine';
 import { readConfig, toChartInput, type FinderConfig } from '../config';
+import { createTracker, type Tracker } from '../events';
 import { defaultDraft, toProfile, type Draft } from '../model';
 import { loadProfile } from '../profile-store';
 import { STRINGS, type Strings } from '../strings';
@@ -17,6 +18,8 @@ export interface FinderContext {
   /** Re-renders the panel body. */
   go(screen: Screen): void;
   close(): void;
+  /** One per element: open and complete send at most once per page view. */
+  track: Tracker;
 }
 
 export type ScreenRenderer = (ctx: FinderContext) => HTMLElement;
@@ -71,6 +74,7 @@ export class TrueSizeFinder extends HTMLElement {
     const trigger = opts.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     // Render before locking anything, so a throwing screen leaves the page as it was and a later open() retries.
     this.go(opts.tab === 'chart' ? 'chart' : this.lastFinder);
+    this.ctx!.track.open();
     this.isOpen = true;
     this.trigger = trigger;
     this.prevOverflow = document.documentElement.style.overflow;
@@ -132,6 +136,7 @@ export class TrueSizeFinder extends HTMLElement {
       },
       go: (screen) => this.go(screen),
       close: () => this.close(),
+      track: createTracker(config),
     };
     applyTheme(this, config.settings);
     this.ui = this.build(config, strings);

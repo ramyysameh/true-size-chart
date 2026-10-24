@@ -297,3 +297,49 @@ describe('<true-size-finder>', () => {
     expect(el.style.getPropertyValue('--tsc-radius')).toBe('4px');
   });
 });
+
+describe('<true-size-finder> events', () => {
+  const EVENTS: FinderConfig = { ...BASE, events: '/apps/tsc/e' };
+  const beacon = () => vi.spyOn(navigator, 'sendBeacon').mockReturnValue(true);
+  const sent = (spy: ReturnType<typeof beacon>) => spy.mock.calls.map(([, data]) => JSON.parse(String(data)) as unknown);
+
+  it('sends one open per page view, however often the finder is reopened', async () => {
+    const spy = beacon();
+    const { el } = setup(EVENTS);
+    await open(el);
+    el.close();
+    await open(el);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0]).toBe('/apps/tsc/e');
+    expect(sent(spy)).toEqual([{ e: 'open', c: 'dev-tshirt-unisex' }]);
+  });
+
+  it('sends open when the finder opens on the size chart tab', async () => {
+    const spy = beacon();
+    const { el } = setup(EVENTS);
+    await open(el, { tab: 'chart' });
+    expect(sent(spy)).toEqual([{ e: 'open', c: 'dev-tshirt-unisex' }]);
+  });
+
+  it('sends no open when the first screen throws, and sends it on the retry that renders', async () => {
+    const spy = beacon();
+    const { el } = setup(EVENTS);
+    el.registerScreen('body', () => {
+      throw new Error('boom');
+    });
+    await expect(el.open()).rejects.toThrow('boom');
+    expect(spy).not.toHaveBeenCalled();
+    el.registerScreen('body', () => h('div'));
+    await open(el);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing without an events URL or in the admin preview', async () => {
+    const spy = beacon();
+    const { el } = setup(BASE);
+    await open(el);
+    const preview = setup({ ...EVENTS, preview: true });
+    await open(preview.el);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
