@@ -3,7 +3,7 @@ import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import type { RangeDays } from "../lib/analytics";
-import { loadSummary } from "../lib/analytics.server";
+import { loadSummary, storeCartRate } from "../lib/analytics.server";
 
 const RANGES: RangeDays[] = [7, 30, 90];
 
@@ -11,13 +11,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const raw = Number(new URL(request.url).searchParams.get("days"));
   const days: RangeDays = RANGES.find((r) => r === raw) ?? 30;
-  return { days, summary: await loadSummary(session.shop, admin, days) };
+  const [summary, store] = await Promise.all([loadSummary(session.shop, admin, days), storeCartRate(admin, days)]);
+  return { days, summary, store };
 };
 
 const pct = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)}%`);
 
 export default function Analytics() {
-  const { days, summary } = useLoaderData<typeof loader>();
+  const { days, summary, store } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { totals, charts } = summary;
   const empty = totals.opens === 0 && totals.completions === 0 && totals.addToCarts === 0;
@@ -63,6 +64,19 @@ export default function Analytics() {
               </s-stack>
             </s-grid>
           </s-section>
+
+          {store && (
+            <s-section heading="Finder versus all shoppers">
+              <s-stack gap="small-200">
+                <s-paragraph>
+                  {`Shoppers who completed the finder: ${pct(totals.cartRate)} added to bag from the finder · All store sessions: ${pct(store.rate)} added anything to cart`}
+                </s-paragraph>
+                <s-text color="subdued">
+                  A rough comparison, not a controlled test: finder users are already interested shoppers.
+                </s-text>
+              </s-stack>
+            </s-section>
+          )}
 
           <s-section heading="By chart">
             <s-table>
