@@ -41,3 +41,18 @@ export function cachedActive(state: EntitlementState, now: Date): boolean {
 export function withinGrace(state: EntitlementState, now: Date): boolean {
   return confirmedWithin(state, now, GRACE_MS);
 }
+
+const TRIAL_DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** One line for the Home plan card. */
+export function planSummary(
+  state: { planHandle: string | null; billingPeriod: string | null; trialEndsAt: Date | null },
+  now: Date,
+): string {
+  if (state.trialEndsAt && state.trialEndsAt.getTime() > now.getTime()) {
+    return `Pro · free trial until ${TRIAL_DATE.format(state.trialEndsAt)}`;
+  }
+  if (state.billingPeriod === 'EVERY_30_DAYS') return 'Pro · monthly';
+  if (state.billingPeriod === 'ANNUAL') return 'Pro · yearly';
+  return 'Pro';
+}
