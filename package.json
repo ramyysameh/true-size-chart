@@ -22,7 +22,8 @@
     "typecheck": "react-router typegen && tsc --noEmit",
     "test:engine": "npm test -w @true-size-chart/engine",
     "test:storefront": "npm test -w @true-size-chart/storefront",
-    "build:storefront": "npm run build -w @true-size-chart/storefront"
+    "build:storefront": "npm run build -w @true-size-chart/storefront",
+    "test:app": "vitest run --config vitest.app.config.ts"
   },
   "type": "module",
   "engines": {
@@ -37,10 +38,11 @@
     "@shopify/app-bridge-react": "^4.2.4",
     "@shopify/shopify-app-react-router": "^3.0.0",
     "@shopify/shopify-app-session-storage-prisma": "^11.0.0",
+    "@true-size-chart/engine": "*",
     "isbot": "^5.1.31",
     "prisma": "^6.16.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-router": "7.18.2",
     "vite-tsconfig-paths": "^5.1.4"
   },
@@ -49,8 +51,8 @@
     "@shopify/polaris-types": "^1.0.1",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.18.8",
-    "@types/react": "^18.3.25",
-    "@types/react-dom": "^18.3.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.1",
@@ -62,7 +64,8 @@
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "vitest": "^2.1.0"
   },
   "workspaces": [
     "packages/*"

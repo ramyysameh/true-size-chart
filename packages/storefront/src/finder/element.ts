@@ -81,7 +81,8 @@ export class TrueSizeFinder extends HTMLElement {
     await this.ready;
     if (!this.isOpen) return;
     ui.root.hidden = false;
-    this.focusables()[0]?.focus();
+    // The admin preview reopens on every edit; taking focus there would pull the merchant out of the field they are typing in.
+    if (!this.ctx!.config.preview) this.focusables()[0]?.focus();
   }
 
   close(): void {

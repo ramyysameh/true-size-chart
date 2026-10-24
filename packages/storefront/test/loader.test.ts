@@ -82,6 +82,17 @@ describe('boot', () => {
     expect([...doc.querySelectorAll('button [data-tsc-label]')].map((n) => n.textContent)).toEqual(['Your size: M', 'Your size: M']);
   });
 
+  it('repaints a button the theme adds after boot, and ignores unrelated additions', async () => {
+    win.localStorage.setItem(PROFILE_KEY, JSON.stringify({ v: 1, sizes: { 'dev-tshirt-unisex': 'XL' } }));
+    run();
+    const wrap = doc.createElement('div');
+    wrap.innerHTML =
+      '<button data-tsc-open data-tsc-default="Find my size" data-tsc-remembered="Your size: {size}"><span data-tsc-label>Find my size</span></button>';
+    doc.body.append(wrap);
+    await settle();
+    expect([...doc.querySelectorAll('button [data-tsc-label]')].map((n) => n.textContent)).toEqual(['Your size: XL', 'Your size: XL']);
+  });
+
   it('keeps the default label when storage throws or holds junk', () => {
     const getItem = vi.spyOn(win.Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');

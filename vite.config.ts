@@ -55,6 +55,10 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 0,
   },
+  ssr: {
+    // The engine ships TypeScript source.
+    noExternal: ["@true-size-chart/engine"],
+  },
   optimizeDeps: {
     include: ["@shopify/app-bridge-react"],
   },

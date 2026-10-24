@@ -77,6 +77,15 @@ describe('<true-size-finder>', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('leaves focus where it is when opened as the admin preview', async () => {
+    const { el, trigger } = setup({ ...BASE, preview: true });
+    trigger.focus();
+    await open(el, { trigger });
+    expect(shown(el)).toBe(true);
+    expect(el.shadowRoot!.activeElement).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it('closes on a backdrop click', async () => {
     const { el, trigger } = setup();
     await open(el, { trigger });

@@ -32,7 +32,11 @@ function withSize(config: FinderConfig, size: string): VariantInfo[] {
   const index = config.sizeOptionIndex;
   if (index === null) return [];
   const wanted = norm(size);
-  return config.variants.filter((v) => norm(v.options[index] ?? '') === wanted);
+  const aliases = config.chart.table.aliases;
+  return config.variants.filter((v) => {
+    const value = norm(v.options[index] ?? '');
+    return value === wanted || norm(aliases?.[value] ?? '') === wanted;
+  });
 }
 
 /** Whether any variant at all carries this size label; a size that is not offered is never "sold out". */

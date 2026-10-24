@@ -1,7 +1,6 @@
 import {
-  TSHIRT_UNISEX,
   recommend,
-  type Category,
+  referenceFor,
   type ChartInput,
   type FitPref,
   type Recommendation,
@@ -20,9 +19,6 @@ export interface Draft {
   fitPref: FitPref;
   units: Units;
 }
-
-/** Category-standard charts the fit note compares against (Plan 3 adds the rest). */
-const REFERENCES: Partial<Record<Category, ChartInput>> = { tshirt: TSHIRT_UNISEX };
 
 export function defaultDraft(
   config: FinderConfig,
@@ -61,6 +57,10 @@ export function liveEstimate(d: Draft, chart: ChartInput): string | null {
 }
 
 /** Throws ChartError (hide the finder) or ProfileError (re-ask). */
-export function finalRecommendation(d: Draft, chart: ChartInput): Recommendation {
-  return recommend(toProfile(d), chart, { reference: REFERENCES[chart.category] });
+export function finalRecommendation(
+  d: Draft,
+  chart: ChartInput,
+  audience: FinderConfig['chart']['audience'] = null,
+): Recommendation {
+  return recommend(toProfile(d), chart, { reference: referenceFor(chart.category, audience) });
 }
