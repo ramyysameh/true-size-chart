@@ -137,3 +137,13 @@ describe('parseStoreRate', () => {
     expect(parseStoreRate({ columns, rows: [{ sessions: 'abc', sessions_with_cart_additions: 1 }] }, [])).toBeNull();
   });
 });
+
+describe('rate clamping', () => {
+  it('never reports a rate above 100%', () => {
+    const rows: DailyRow[] = [{ chartKey: 'tee', date: '2026-10-24', opens: 4, completions: 3, addToCarts: 5 }];
+    const s = summarize(rows, [], [tee], range);
+    expect(s.totals.cartRate).toBe(1);
+    expect(s.totals.addToCarts).toBe(5);
+    expect(s.charts.find((c) => c.chartKey === 'tee')!.cartRate).toBe(1);
+  });
+});

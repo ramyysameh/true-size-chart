@@ -194,7 +194,7 @@ describe('the steps in the finder', () => {
     mountConfig(document, BASE);
     const el = document.createElement('true-size-finder') as TrueSizeFinder;
     document.body.append(el);
-    const result = vi.fn((_ctx: FinderContext) => document.createElement('div'));
+    const result = vi.fn<(ctx: FinderContext) => HTMLElement>(() => document.createElement("div"));
     el.registerScreen('result', result);
     const opening = el.open();
     el.shadowRoot!.querySelector('link')!.dispatchEvent(new Event('load'));

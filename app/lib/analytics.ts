@@ -36,7 +36,7 @@ export function dateRange(today: string, days: RangeDays): { from: string; to: s
   return { from: addDays(today, -(days - 1)), to: today };
 }
 
-const rate = (num: number, den: number) => (den === 0 ? null : num / den);
+const rate = (num: number, den: number) => (den === 0 ? null : Math.min(1, num / den));
 
 function totalsOf(opens: number, completions: number, addToCarts: number): Totals {
   return { opens, completions, addToCarts, completionRate: rate(completions, opens), cartRate: rate(addToCarts, completions) };
