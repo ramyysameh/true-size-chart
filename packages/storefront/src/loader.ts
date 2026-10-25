@@ -14,7 +14,7 @@ const TAG = 'true-size-finder';
 const OPENER = '[data-tsc-open]';
 const BUSY = 'aria-busy';
 
-export function boot(doc: Document, win: Window): void {
+export function boot(doc: Document, win: Window & typeof globalThis): void {
   let config: FinderConfig;
   try {
     config = JSON.parse(doc.getElementById('tsc-config')!.textContent!);

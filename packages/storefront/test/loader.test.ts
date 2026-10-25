@@ -18,7 +18,7 @@ const label = () => doc.querySelector('[data-tsc-label]')?.textContent;
 const fire = (el: Element, type: string) => el.dispatchEvent(new win.Event(type, { bubbles: true }) as unknown as Event);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const on = () => doc.documentElement.classList.contains('tsc-on');
-const run = () => boot(doc, win as unknown as globalThis.Window);
+const run = () => boot(doc, win as unknown as globalThis.Window & typeof globalThis);
 
 /** Defines a stub finder whose `open` is a mock; returns the mock. */
 function defineStub(result: Promise<void> = Promise.resolve()) {
