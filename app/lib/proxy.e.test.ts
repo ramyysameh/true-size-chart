@@ -86,6 +86,14 @@ describe('app proxy event route', () => {
     expect(mocks.findShopState).not.toHaveBeenCalled();
   });
 
+  it('answers 204 to a 50 KB body without recording', async () => {
+    mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
+    const res = await post(JSON.stringify({ e: 'open', c: 'tee', pad: 'x'.repeat(50_000) }));
+    expect(res.status).toBe(204);
+    expect(mocks.recordEvent).not.toHaveBeenCalled();
+    expect(mocks.findShopState).not.toHaveBeenCalled();
+  });
+
   it('answers 204 when the db throws', async () => {
     mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
     mocks.findShopState.mockResolvedValue(null);

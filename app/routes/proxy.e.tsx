@@ -1,10 +1,11 @@
 // Storefront finder events, reached through the app proxy at /apps/tsc/e.
-// Privacy: reads only the body and what authenticate.public.appProxy needs. No IP, headers,
-// customer id or other query params are read, stored or logged here.
+// Privacy: reads only the body, the content-length header (to refuse oversized bodies) and what
+// authenticate.public.appProxy needs. No IP, other headers, customer id or other query params are
+// read, stored or logged here.
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { localDate, parseEvent, RateLimiter } from "../lib/events";
+import { localDate, MAX_EVENT_BYTES, parseEvent, RateLimiter, readCapped } from "../lib/events";
 import { recordEvent } from "../lib/events.server";
 
 const limiter = new RateLimiter();
@@ -19,7 +20,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const shop = session.shop;
-    const ev = parseEvent(await request.text());
+    const body = await readCapped(request, MAX_EVENT_BYTES);
+    const ev = body === null ? null : parseEvent(body);
     if (!ev || !limiter.allow(shop)) return noContent();
     const state = await db.shopState.findUnique({ where: { shop }, select: { timezone: true } });
     await recordEvent(db, shop, ev, localDate(new Date(), state?.timezone));
