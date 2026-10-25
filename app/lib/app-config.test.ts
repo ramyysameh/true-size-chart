@@ -34,6 +34,22 @@ describe('app proxy path', () => {
   });
 });
 
+describe('shopify.app.toml production URLs', () => {
+  it('has no placeholder example.com left', () => {
+    expect(toml).not.toMatch(/example\.com/);
+  });
+
+  it('serves the app over https from a domain without "shopify" or "example"', () => {
+    const url = toml.match(/^application_url = "([^"]+)"/m)?.[1] ?? '';
+    expect(url.startsWith('https://')).toBe(true);
+    expect(url).not.toMatch(/shopify|example/i);
+  });
+
+  it('uses the listing name, so the dashboard and the listing match', () => {
+    expect(toml).toMatch(/^name = "True: Size Chart"$/m);
+  });
+});
+
 describe('app sources', () => {
   it('never use shopifyqlQuery or read_reports', () => {
     const files = (readdirSync('app', { recursive: true }) as string[])

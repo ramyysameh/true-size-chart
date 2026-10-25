@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "87a1e91cb347cde878814b5506901348"
-name = "true-size-chart"
-application_url = "https://example.com"
+name = "True: Size Chart"
+application_url = "https://true-size-chart.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -103,7 +103,7 @@ prefix = "apps"
 subpath = "tsc"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://true-size-chart.onrender.com/auth/callback" ]
 
 [build]
 include_config_on_deploy = true
