@@ -1,6 +1,7 @@
 import { ftInToCm, type ShapeStep } from '@true-size-chart/engine';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toChartInput, type FinderConfig } from '../src/config';
+import { createTracker } from '../src/events';
 import type { FinderContext, ScreenRenderer, TrueSizeFinder } from '../src/finder/element';
 import { renderBody } from '../src/finder/screens/body';
 import { renderFit } from '../src/finder/screens/fit';
@@ -23,6 +24,7 @@ function mount(render: ScreenRenderer, patch: Partial<Draft> = {}) {
     },
     go: vi.fn(),
     close() {},
+    track: createTracker(CONFIG),
   };
   const root = render(ctx);
   document.body.replaceChildren(root);
@@ -192,7 +194,7 @@ describe('the steps in the finder', () => {
     mountConfig(document, BASE);
     const el = document.createElement('true-size-finder') as TrueSizeFinder;
     document.body.append(el);
-    const result = vi.fn((_ctx: FinderContext) => document.createElement('div'));
+    const result = vi.fn<(ctx: FinderContext) => HTMLElement>(() => document.createElement("div"));
     el.registerScreen('result', result);
     const opening = el.open();
     el.shadowRoot!.querySelector('link')!.dispatchEvent(new Event('load'));

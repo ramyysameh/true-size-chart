@@ -195,6 +195,32 @@ describe('syncProducts', () => {
     expect(err).toBeInstanceOf(AdminError);
     expect(err.userErrors).toEqual(userErrors);
   });
+
+  it('rejects a next page without a cursor and sends no mutation', async () => {
+    const calls: Call[] = [];
+    const admin: AdminClient = {
+      async graphql(query, options) {
+        calls.push({ query, variables: options?.variables });
+        if (query.includes('query ProductFacts')) {
+          // Page one claims more pages but gives no cursor. Page two ends the list, so a regression
+          // resolves (red) instead of paging forever with `after: null`.
+          const first = calls.filter((c) => c.query.includes('query ProductFacts')).length === 1;
+          const products = {
+            nodes: first ? [node(1)] : [],
+            pageInfo: { hasNextPage: first, endCursor: null },
+          };
+          return new Response(JSON.stringify({ data: { products } }));
+        }
+        return new Response(
+          JSON.stringify({ data: { metafieldsSet: { metafields: [], userErrors: [] } } }),
+        );
+      },
+    };
+    const err = (await syncProducts(admin, [teeRule]).catch((e) => e)) as AdminError;
+    expect(err).toBeInstanceOf(AdminError);
+    expect(err.message).toBe('The product list came back incomplete (next page without a cursor).');
+    expect(calls.filter((c) => c.query.includes('mutation'))).toEqual([]);
+  });
 });
 
 describe('syncProducts batch failures', () => {

@@ -5,6 +5,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { listCharts } from "../lib/charts.server";
 import { setupChecklist } from "../lib/onboarding";
+import { appHandle, planPageUrl, planSummary } from "../lib/entitlement";
 import { relativeTime, syncStatus } from "../lib/sync-status";
 import { useExtensionStatus } from "../components/useExtensionStatus";
 
@@ -20,6 +21,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const now = new Date();
   const status = syncStatus(state, now);
   return {
+    plan: planSummary(state, now),
+    planUrl: planPageUrl(session.shop, appHandle()),
     charts: charts.length,
     rules: ruleCount,
     sync:
@@ -63,6 +66,13 @@ export default function Index() {
               {i.done ? null : <s-link href={i.href}>{i.key === "mapping" ? "Open" : "Fix"}</s-link>}
             </s-stack>
           ))}
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Plan">
+        <s-stack gap="small-200">
+          <s-text>{data.plan}</s-text>
+          <s-link href={data.planUrl} target="_top">Change plan</s-link>
         </s-stack>
       </s-section>
 

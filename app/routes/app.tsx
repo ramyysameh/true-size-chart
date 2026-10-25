@@ -4,9 +4,18 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
+import { appHandle, planPageUrl } from "../lib/entitlement";
+import { checkEntitlement } from "../lib/entitlement.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { admin, redirect, session } = await authenticate.admin(request);
+
+  // The welcome link from the plan page adds plan_handle: skip the cache so the new plan shows at once.
+  const fresh = new URL(request.url).searchParams.has("plan_handle");
+  const entitlement = await checkEntitlement(admin, session.shop, { fresh });
+  if (!entitlement.active) {
+    return redirect(planPageUrl(session.shop, appHandle()), { target: "_top" });
+  }
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
@@ -22,6 +31,7 @@ export default function App() {
         <s-link href="/app/charts">Charts</s-link>
         <s-link href="/app/rules">Assignments</s-link>
         <s-link href="/app/mapping">Size mapping</s-link>
+        <s-link href="/app/analytics">Analytics</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

@@ -4,6 +4,7 @@ import type { FinderConfig } from '../src/config';
 import { cta } from '../src/copy';
 import type { FinderContext, TrueSizeFinder } from '../src/finder/element';
 import { renderResult } from '../src/finder/screens/result';
+import type { Tracker } from '../src/events';
 import '../src/index';
 import { defaultDraft, finalRecommendation, toProfile, type Draft } from '../src/model';
 import { PROFILE_KEY } from '../src/profile-store';
@@ -17,6 +18,7 @@ const DRAFT: Draft = { ...defaultDraft(CONFIG, null, 'en-GB'), sex: 'male', heig
 const BLACK_M = 1001;
 const WHITE_M = 1011;
 const WHITE_XL = 1013;
+const NO_TRACK: Tracker = { open() {}, complete() {}, addToCart() {} };
 
 let reduced = true;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -343,6 +345,7 @@ describe('result screen', () => {
       setDraft() {},
       go,
       close() {},
+      track: NO_TRACK,
     };
     renderResult(ctx);
     expect(go).toHaveBeenCalledWith('body');
@@ -355,8 +358,76 @@ describe('result screen', () => {
       ...CONFIG,
       chart: { ...CONFIG.chart, table: { sizes: ['S', 'M'], measurements: { hip: [96, 100] } } },
     };
-    const ctx: FinderContext = { config, strings: { ...STRINGS }, draft: DRAFT, setDraft() {}, go, close() {} };
+    const ctx: FinderContext = { config, strings: { ...STRINGS }, draft: DRAFT, setDraft() {}, go, close() {}, track: NO_TRACK };
     renderResult(ctx);
     expect(go).toHaveBeenCalledWith('chart');
+  });
+});
+
+describe('result screen events', () => {
+  const EVENTS: FinderConfig = { ...BASE, events: '/apps/tsc/e' };
+  const beacon = () => vi.spyOn(navigator, 'sendBeacon').mockReturnValue(true);
+  const sent = (spy: ReturnType<typeof beacon>) => spy.mock.calls.map(([, data]) => JSON.parse(String(data)) as unknown);
+  const C = 'dev-tshirt-unisex';
+
+  it('sends one complete with the recommended size, however often sizes are switched', async () => {
+    const spy = beacon();
+    const root = await openResult({ config: EVENTS });
+    sizeButton(root, 'L').click();
+    sizeButton(root, 'M').click();
+    // open goes once the first screen has rendered, and here that screen is the result.
+    expect(sent(spy)).toEqual([
+      { e: 'complete', c: C, s: 'XL' },
+      { e: 'open', c: C },
+    ]);
+  });
+
+  it('sends no second complete after Edit details and back to the result', async () => {
+    const spy = beacon();
+    const root = await openResult({ config: EVENTS });
+    byText(root, '.tsc-links button', 'Edit details')!.click();
+    for (let i = 0; i < 3; i++) root.querySelector<HTMLElement>('.tsc-foot .tsc-primary')!.click();
+    expect(text(root, '.tsc-ring .tsc-num')).toBe('XL');
+    expect(sent(spy).filter((p) => (p as { e: string }).e === 'complete')).toHaveLength(1);
+  });
+
+  it('sends atc with the added size on a successful add', async () => {
+    const spy = beacon();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const root = await openResult({ config: EVENTS });
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe('Added to bag'));
+    expect(sent(spy).slice(-1)[0]).toEqual({ e: 'atc', c: C, s: 'XL' });
+  });
+
+  it('sends atc with the substituted size, and when the theme drawer takes over', async () => {
+    const rec = finalRecommendation(DRAFT, DEV_CHART);
+    const alt = inStockPick(rec, 'XL', CONFIG, BLACK_M)!.size;
+    const spy = beacon();
+    const root = await openResult({ config: EVENTS, variant: BLACK_M });
+    document.body.insertAdjacentHTML('beforeend', '<cart-drawer class="drawer"><div id="CartDrawer"></div></cart-drawer>');
+    (document.querySelector('cart-drawer') as unknown as { renderContents: unknown }).renderContents = () => {};
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ sections: {} }) });
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(root.querySelector<HTMLElement>('.tsc-root')!.hidden).toBe(true));
+    expect(sent(spy).slice(-1)[0]).toEqual({ e: 'atc', c: C, s: alt });
+  });
+
+  it('sends no atc when the add fails', async () => {
+    const spy = beacon();
+    fetchMock.mockResolvedValue({ ok: false, status: 422, json: async () => ({ status: 422, message: 'Cart Error', description: 'Sold out.' }) });
+    const root = await openResult({ config: EVENTS });
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe('Sold out.'));
+    expect(sent(spy).map((p) => (p as { e: string }).e)).toEqual(['complete', 'open']);
+  });
+
+  it('sends nothing at all in the admin preview', async () => {
+    const spy = beacon();
+    const root = await openResult({ config: { ...EVENTS, preview: true } });
+    sizeButton(root, 'L').click();
+    ctaButton(root)!.click();
+    await vi.waitFor(() => expect(text(root, '.tsc-status')).toBe(STRINGS.previewAdded));
+    expect(spy).not.toHaveBeenCalled();
   });
 });

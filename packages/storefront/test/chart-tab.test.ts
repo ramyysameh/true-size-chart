@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FinderConfig } from '../src/config';
+import { createTracker } from '../src/events';
 import type { FinderContext } from '../src/finder/element';
 import { renderChart } from '../src/finder/screens/chart';
 import { defaultDraft } from '../src/model';
@@ -15,6 +16,7 @@ function render(chart: Partial<FinderConfig['chart']>): HTMLElement {
     setDraft() {},
     go() {},
     close() {},
+    track: createTracker(config),
   };
   return renderChart(ctx);
 }

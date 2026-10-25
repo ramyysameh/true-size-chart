@@ -36,6 +36,7 @@ export const renderResult: ScreenRenderer = (ctx) => {
     return h('div');
   }
   saveProfile(toProfile(draft), draft.units, config.chart.key, rec.size);
+  ctx.track.complete(rec.size);
   paintRemembered(document, rec.size);
 
   const sizes = config.chart.table.sizes;
@@ -131,6 +132,7 @@ export const renderResult: ScreenRenderer = (ctx) => {
       button.textContent = s.adding;
       const result = await addToCart(config, now.variant.id, document);
       sizeButtons.forEach((b) => b.removeAttribute('disabled'));
+      if (result.ok) ctx.track.addToCart(pick.size);
       if (result.ok && result.drawer) {
         // The theme's cart drawer opens itself next tick: get out of its way (one modal at a time).
         ctx.close();

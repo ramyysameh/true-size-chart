@@ -5,8 +5,12 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { startEntitlementRefresher } from "./lib/entitlement.server";
 
 export const streamTimeout = 5000;
+
+// Re-checks App Pricing subscriptions in the background (once per process; never under tests).
+startEntitlementRefresher();
 
 export default async function handleRequest(
   request: Request,

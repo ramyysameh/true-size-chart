@@ -31,6 +31,8 @@ export interface FinderConfig {
   strings: Record<string, string>;
   /** Admin preview: the add button never touches a cart. */
   preview?: boolean;
+  /** App proxy URL for anonymous finder events; absent = no events (the admin preview never sets it). */
+  events?: string;
 }
 
 /** Reads the block's inline config; null when it is absent or not JSON. */

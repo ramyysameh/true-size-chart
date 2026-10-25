@@ -53,6 +53,7 @@
         "selectedVariantId": {{ selected_variant.id }},
         "routes": { "cartAdd": {{ routes.cart_add_url | json }}, "cart": {{ routes.cart_url | json }} },
         "assets": { "js": {{ 'tsc-finder.js' | asset_url | json }}, "css": {{ 'tsc-finder.css' | asset_url | json }} },
+        "events": "/apps/tsc/e",
         "settings": {
           "font": {{ block.settings.font | json }},
           "accent": {{ accent | json }},
@@ -77,6 +78,7 @@
 {
   "name": "True: Size Chart",
   "target": "body",
+  "available_if": "{{ app.metafields.tsc.active }}",
   "settings": [
     {
       "type": "text",

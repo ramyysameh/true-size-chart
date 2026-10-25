@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   sessions: vi.fn(),
   rules: vi.fn(),
   states: vi.fn(),
+  eventDays: vi.fn(),
+  eventSizes: vi.fn(),
 }));
 
 vi.mock('../shopify.server', () => ({ authenticate: { webhook: mocks.webhook } }));
@@ -14,6 +16,8 @@ vi.mock('../db.server', () => ({
     session: { deleteMany: mocks.sessions },
     assignmentRule: { deleteMany: mocks.rules },
     shopState: { deleteMany: mocks.states },
+    eventDaily: { deleteMany: mocks.eventDays },
+    eventSizeDaily: { deleteMany: mocks.eventSizes },
   },
 }));
 
@@ -33,6 +37,8 @@ describe('app/uninstalled webhook', () => {
     expect(res.status).toBe(200);
     expect(mocks.rules).toHaveBeenCalledWith({ where: { shop: SHOP } });
     expect(mocks.states).toHaveBeenCalledWith({ where: { shop: SHOP } });
+    expect(mocks.eventDays).toHaveBeenCalledWith({ where: { shop: SHOP } });
+    expect(mocks.eventSizes).toHaveBeenCalledWith({ where: { shop: SHOP } });
     expect(mocks.sessions).not.toHaveBeenCalled();
   });
 
@@ -43,5 +49,7 @@ describe('app/uninstalled webhook', () => {
     expect(mocks.sessions).toHaveBeenCalledWith({ where: { shop: SHOP } });
     expect(mocks.rules).toHaveBeenCalled();
     expect(mocks.states).toHaveBeenCalled();
+    expect(mocks.eventDays).toHaveBeenCalled();
+    expect(mocks.eventSizes).toHaveBeenCalled();
   });
 });
