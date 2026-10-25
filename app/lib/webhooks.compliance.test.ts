@@ -105,4 +105,26 @@ describe('compliance webhooks', () => {
     await expect(run()).rejects.toBe(unauthorized);
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
+
+  it('still redacts when the offline token refresh fails after a valid HMAC', async () => {
+    const { createHmac } = await import('node:crypto');
+    vi.stubEnv('SHOPIFY_API_SECRET', 'test-secret');
+    mocks.webhook.mockRejectedValue(new Response(null, { status: 500 }));
+    mocks.sessionCount.mockResolvedValue(0);
+    mocks.transaction.mockResolvedValue([]);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const body = JSON.stringify({ shop_id: 1, shop_domain: SHOP });
+    const hmac = createHmac('sha256', 'test-secret').update(body).digest('base64');
+    const request = new Request('https://app.test/webhooks/compliance', {
+      method: 'POST',
+      body,
+      headers: { 'X-Shopify-Hmac-Sha256': hmac, 'X-Shopify-Shop-Domain': SHOP, 'X-Shopify-Topic': 'shop/redact' },
+    });
+
+    const res = await action({ request } as never);
+
+    expect(res.status).toBe(200);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
 });

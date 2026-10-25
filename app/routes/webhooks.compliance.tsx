@@ -1,13 +1,13 @@
 // Mandatory privacy compliance webhooks (customers/data_request, customers/redact, shop/redact).
 // Payloads can hold customer emails and phones: log the topic and shop only, never the payload.
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { authenticateWebhook } from "../lib/webhook-auth.server";
 import db from "../db.server";
 import { deleteShopData } from "../lib/shop-data.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   // An invalid HMAC throws the library's 401 Response, which Shopify requires; let it through.
-  const { shop, topic } = await authenticate.webhook(request);
+  const { shop, topic } = await authenticateWebhook(request);
   console.log(`Received ${topic} webhook for ${shop}`);
 
   switch (topic) {

@@ -50,4 +50,26 @@ describe('app/uninstalled webhook', () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.transaction.mock.calls[0][0]).toHaveLength(5);
   });
+
+  it('still deletes everything when the offline token refresh fails after a valid HMAC', async () => {
+    const { createHmac } = await import('node:crypto');
+    vi.stubEnv('SHOPIFY_API_SECRET', 'test-secret');
+    mocks.webhook.mockRejectedValue(new Response(null, { status: 500 }));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    mocks.transaction.mockResolvedValue([]);
+    const body = JSON.stringify({ id: 1 });
+    const hmac = createHmac('sha256', 'test-secret').update(body).digest('base64');
+    const request = new Request('https://app.test/webhooks/app/uninstalled', {
+      method: 'POST',
+      body,
+      headers: { 'X-Shopify-Hmac-Sha256': hmac, 'X-Shopify-Shop-Domain': SHOP, 'X-Shopify-Topic': 'app/uninstalled' },
+    });
+
+    const res = await action({ request } as never);
+
+    expect(res.status).toBe(200);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.rules).toHaveBeenCalledWith({ where: { shop: SHOP } });
+    vi.unstubAllEnvs();
+  });
 });
