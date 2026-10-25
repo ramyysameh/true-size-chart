@@ -5,6 +5,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { TEMPLATES, type Dim } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
+import { authenticatePro } from "../lib/gate.server";
 import { getChart, saveChart } from "../lib/charts.server";
 import {
   blankDraft,
@@ -77,7 +78,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 type ActionResult = { saved: boolean; errors: string[]; draft?: ChartDraft };
 
 export const action = async ({ request, params }: ActionFunctionArgs): Promise<ActionResult | Response> => {
-  const { admin, redirect } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticatePro(request);
   const form = await request.formData();
   let draft = parseDraftBody(String(form.get("draft") ?? ""));
   if (!draft) return { saved: false, errors: ["The chart could not be read. Reload the page and try again."] };

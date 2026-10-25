@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "re
 import { Await, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { authenticatePro } from "../lib/gate.server";
 import { getChart, saveChart } from "../lib/charts.server";
 import { loadMappingIssues, loadSizeOptionNames, saveSizeOptionNames } from "../lib/mapping.server";
 import { groupIssuesByChart, type ChartIssueGroup, mergeAliases, parseSizeOptionNames } from "../lib/size-mapping";
@@ -24,7 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await authenticatePro(request);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
 
