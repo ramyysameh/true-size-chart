@@ -92,6 +92,10 @@ api_version = "2027-01"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/compliance"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
 # Storefront finder events: /apps/tsc/e on the shop's domain reaches /proxy/e here.
 [app_proxy]
 url = "/proxy"

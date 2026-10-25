@@ -11,6 +11,18 @@ describe('shopify.app.toml scopes', () => {
   });
 });
 
+describe('shopify.app.toml webhooks', () => {
+  it('subscribes /webhooks/compliance to all three privacy compliance topics', () => {
+    const blocks = toml.split('[[webhooks.subscriptions]]').slice(1);
+    const compliance = blocks.find((b) => /uri = "\/webhooks\/compliance"/.test(b));
+    expect(compliance).toBeDefined();
+    const topics = compliance!.match(/compliance_topics = \[([^\]]*)\]/)?.[1] ?? '';
+    for (const topic of ['customers/data_request', 'customers/redact', 'shop/redact']) {
+      expect(topics).toContain(`"${topic}"`);
+    }
+  });
+});
+
 describe('app sources', () => {
   it('never use shopifyqlQuery or read_reports', () => {
     const files = (readdirSync('app', { recursive: true }) as string[])
