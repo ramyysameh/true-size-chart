@@ -132,6 +132,41 @@ export async function checkEntitlement(
   return active ? { active: true, source: 'partner' } : { active: false };
 }
 
+/**
+ * Re-reads the shop's identity after every OAuth / token exchange and stores it, so a reinstall
+ * (whose uninstall webhook may never have run) points `tsc.active` at the new installation.
+ * `entitlementWritten` is always cleared so the next real check rewrites the metafield; a changed
+ * installation id also clears `entitlementCheckedAt`, because a reinstall can mean another subscription.
+ * Never throws: an auth must not fail because of this.
+ */
+export async function refreshShopContext(
+  admin: AdminClient,
+  shop: string,
+  deps: Partial<Pick<EntitlementDeps, 'db'>> = {},
+): Promise<void> {
+  try {
+    const { db } = await resolveDeps(deps);
+    const ctx = await gql<ShopContextData>(admin, SHOP_CONTEXT);
+    const known = {
+      shopGid: ctx.shop.id,
+      installationId: ctx.currentAppInstallation.id,
+      timezone: ctx.shop.ianaTimezone ?? null,
+    };
+    const previous = await db.shopState.findUnique({ where: { shop } });
+    const reset =
+      previous?.installationId === known.installationId
+        ? { entitlementWritten: null }
+        : { entitlementWritten: null, entitlementCheckedAt: null };
+    await db.shopState.upsert({
+      where: { shop },
+      create: { shop, ...known, ...reset },
+      update: { ...known, ...reset },
+    });
+  } catch (error) {
+    console.error(`Shop context refresh for ${shop} failed (${describeError(error)})`);
+  }
+}
+
 const SPACING_MS = 300; // Partner API allows 4 requests/s per client, shared with admin loads.
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

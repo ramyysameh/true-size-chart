@@ -6,6 +6,7 @@ import {
   LEASE_MS,
   REFRESH_LEASE,
   refreshEntitlements,
+  refreshShopContext,
   runRefresh,
   startEntitlementRefresher,
   type EntitlementDeps,
@@ -88,7 +89,9 @@ interface Call {
   variables?: Record<string, unknown>;
 }
 
-function fakeAdmin(opts: { userErrors?: { field: string[]; message: string }[] } = {}) {
+function fakeAdmin(
+  opts: { userErrors?: { field: string[]; message: string }[]; installation?: string } = {},
+) {
   const calls: Call[] = [];
   const admin: AdminClient = {
     async graphql(query, options) {
@@ -98,7 +101,7 @@ function fakeAdmin(opts: { userErrors?: { field: string[]; message: string }[] }
           JSON.stringify({
             data: {
               shop: { id: SHOP_GID, myshopifyDomain: SHOP, ianaTimezone: 'America/Los_Angeles' },
-              currentAppInstallation: { id: INSTALL },
+              currentAppInstallation: { id: opts.installation ?? INSTALL },
             },
           }),
         );
@@ -446,5 +449,106 @@ describe('startEntitlementRefresher', () => {
     expect(setIntervalSpy).not.toHaveBeenCalled();
     expect(setTimeoutSpy).not.toHaveBeenCalled();
     expect((globalThis as { __tscRefresher?: unknown }).__tscRefresher).toBeUndefined();
+  });
+});
+
+describe('refreshShopContext', () => {
+  const INSTALL_2 = 'gid://shopify/AppInstallation/2';
+
+  it('stores a new installation id and clears both the written flag and the check time', async () => {
+    const { db, table } = fakeDb([
+      known({ installationId: 'gid://shopify/AppInstallation/1', entitled: true, entitlementWritten: true, entitlementCheckedAt: ago(60_000) }),
+    ]);
+    const { admin } = fakeAdmin({ installation: INSTALL_2 });
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    const row = table.get(SHOP)!;
+    expect(row.installationId).toBe(INSTALL_2);
+    expect(row.shopGid).toBe(SHOP_GID);
+    expect(row.timezone).toBe('America/Los_Angeles');
+    expect(row.entitlementWritten).toBeNull();
+    expect(row.entitlementCheckedAt).toBeNull();
+  });
+
+  it('keeps the check time when the installation id is unchanged, but still clears the written flag', async () => {
+    const checked = ago(60_000);
+    const { db, table } = fakeDb([known({ entitled: true, entitlementWritten: true, entitlementCheckedAt: checked })]);
+    const { admin } = fakeAdmin();
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    const row = table.get(SHOP)!;
+    expect(row.installationId).toBe(INSTALL);
+    expect(row.entitlementWritten).toBeNull();
+    expect(row.entitlementCheckedAt).toEqual(checked);
+  });
+
+  it('creates the row when the shop has none', async () => {
+    const { db, table } = fakeDb();
+    const { admin } = fakeAdmin();
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    expect(table.get(SHOP)).toMatchObject({
+      shop: SHOP,
+      shopGid: SHOP_GID,
+      installationId: INSTALL,
+      timezone: 'America/Los_Angeles',
+      entitlementWritten: null,
+      entitlementCheckedAt: null,
+    });
+  });
+
+  it('resolves and logs once, without a response body, when the query fails', async () => {
+    const { db, table } = fakeDb([known()]);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const admin: AdminClient = {
+      async graphql() {
+        return new Response(JSON.stringify({ errors: [{ message: 'Access denied' }], secret: 'tok_123' }));
+      },
+    };
+
+    await expect(refreshShopContext(admin, SHOP, { db })).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = String(error.mock.calls[0].join(' '));
+    expect(line).toContain(`Shop context refresh for ${SHOP} failed (`);
+    expect(line).not.toContain('tok_123');
+    expect(table.get(SHOP)).toEqual(known());
+  });
+
+  it('resolves and logs once when the database write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const db = {
+      shopState: {
+        findUnique: vi.fn().mockRejectedValue(new Error('db down')),
+      },
+    } as unknown as EntitlementDeps['db'];
+
+    await expect(refreshShopContext(fakeAdmin().admin, SHOP, { db })).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a reinstall the next check writes tsc.active once to the new installation (Review Focus 1)', async () => {
+    const { db } = fakeDb([
+      known({
+        installationId: 'gid://shopify/AppInstallation/1',
+        entitled: true,
+        entitlementWritten: true,
+        entitlementCheckedAt: ago(60_000),
+      }),
+    ]);
+    const { admin, writes } = fakeAdmin({ installation: INSTALL_2 });
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+
+    await refreshShopContext(admin, SHOP, { db });
+    const result = await checkEntitlement(admin, SHOP, { deps: deps(db, fetchSubscription) });
+
+    expect(result).toEqual({ active: true, source: 'partner' });
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0].variables).toEqual({
+      metafields: [{ ownerId: INSTALL_2, namespace: 'tsc', key: 'active', type: 'boolean', value: 'true' }],
+    });
   });
 });
