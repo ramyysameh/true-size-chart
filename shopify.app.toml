@@ -7,7 +7,7 @@ embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy,read_reports"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy"
 
 # A size chart a merchant builds once and assigns to many products.
 # `table` holds the engine's ChartTable JSON: { sizes: string[], measurements: { chest?: (number|null)[], ... } }.

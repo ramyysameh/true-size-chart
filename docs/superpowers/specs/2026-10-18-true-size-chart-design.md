@@ -42,7 +42,7 @@ A **public Shopify App Store app** **[user]** that merchants pick because it is 
 - **Assignment rules**: by product, collection, product type, vendor or tag, with priority order. The app resolves the rules and writes a product metafield (see §5), and keeps it fresh through product webhooks.
 - **Size mapping check**: shows products whose "Size" option values don't match chart labels and lets the merchant fix the mapping.
 - **Live preview**: the real finder rendered inside the admin with the chart being edited.
-- **Analytics**: finder opens, completions, add-to-carts from the finder, conversion versus non-users, and recommended-size distribution per chart. All events are anonymous.
+- **Analytics**: finder opens, completions, add-to-carts from the finder, add-to-bag rate of finder users (a store-wide comparison was dropped: it needs protected customer data, 2026-10-25), and recommended-size distribution per chart. All events are anonymous.
 - **Plans** through **Shopify App Pricing** (hosted plan page, Partner Dashboard), with feature gating by active subscription.
 
 ## 3. Non-goals (v1)
@@ -133,7 +133,7 @@ Golden tests lock the behavior, including the video's observations under the def
 A 14-day free trial on paid plans. Gating reads the active subscription. A dev store gets the plans free for testing.
 
 ## 8. Compliance and quality
-- Scopes: `read_products`, `write_products` (product metafields), metaobjects scopes as required by app-owned definitions, `read_themes` (only to check that the embed is enabled for onboarding). No customer scopes and no protected customer data.
+- Scopes: `write_products`, `write_metaobjects`, `write_metaobject_definitions`, `write_app_proxy`. No customer scopes, no `read_reports` and no protected customer data.
 - Mandatory privacy webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) are implemented. Analytics data is deleted on `shop/redact`.
 - Uninstall: clear the DB rows for the shop. Metaobjects owned by the app are removed with the app.
 - Session-token auth and App Bridge (template defaults). The admin passes the Built for Shopify admin performance criteria (LCP, CLS, INP).
