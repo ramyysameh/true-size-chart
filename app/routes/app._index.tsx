@@ -8,21 +8,26 @@ import { setupChecklist } from "../lib/onboarding";
 import { appHandle, planPageUrl, planSummary } from "../lib/entitlement";
 import { relativeTime, syncStatus } from "../lib/sync-status";
 import { useExtensionStatus } from "../components/useExtensionStatus";
+import { proxyStatus } from "../lib/proxy-check.server";
+import { ProxyBanner } from "../components/ProxyBanner";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session, redirect } = await authenticate.admin(request);
   const state = await db.shopState.findUnique({ where: { shop: session.shop } });
   if (!state?.onboardedAt) throw await redirect("/app/onboarding");
 
-  const [charts, ruleCount] = await Promise.all([
+  const recheck = new URL(request.url).searchParams.get("proxy") === "recheck";
+  const [charts, ruleCount, proxy] = await Promise.all([
     listCharts(admin),
     db.assignmentRule.count({ where: { shop: session.shop } }),
+    proxyStatus(session.shop, { recheck }),
   ]);
   const now = new Date();
   const status = syncStatus(state, now);
   return {
     plan: planSummary(state, now),
     planUrl: planPageUrl(session.shop, appHandle()),
+    proxy,
     charts: charts.length,
     rules: ruleCount,
     sync:
@@ -52,6 +57,7 @@ export default function Index() {
 
   return (
     <s-page heading="True: Size Chart">
+      <ProxyBanner status={data.proxy} />
       <s-section heading="Setup checklist">
         <s-stack gap="base">
           <s-text color="subdued">

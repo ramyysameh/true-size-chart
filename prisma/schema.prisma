@@ -65,6 +65,8 @@ model ShopState {
   entitled             Boolean   @default(false)
   entitlementCheckedAt DateTime? // last confirmed Partner answer
   entitlementWritten   Boolean? // last value written to tsc.active (null = never)
+  proxyStatus          String? // ok | moved | unknown, from probing /apps/tsc/ping
+  proxyCheckedAt       DateTime?
 }
 
 // Storefront finder counters, one row per chart and shop-local day. Incremented at write time.

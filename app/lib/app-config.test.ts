@@ -23,6 +23,17 @@ describe('shopify.app.toml webhooks', () => {
   });
 });
 
+describe('app proxy path', () => {
+  it('matches PROXY_PATH in the TOML and in the embed', async () => {
+    const { PROXY_PATH } = await import('./proxy-check.server');
+    const prefix = toml.match(/^prefix = "([^"]+)"/m)?.[1];
+    const subpath = toml.match(/^subpath = "([^"]+)"/m)?.[1];
+    expect(`/${prefix}/${subpath}`).toBe(PROXY_PATH);
+    const embed = readFileSync('extensions/true-size-chart/blocks/tsc-embed.liquid', 'utf8');
+    expect(embed).toContain(`"events": "${PROXY_PATH}/e"`);
+  });
+});
+
 describe('app sources', () => {
   it('never use shopifyqlQuery or read_reports', () => {
     const files = (readdirSync('app', { recursive: true }) as string[])
