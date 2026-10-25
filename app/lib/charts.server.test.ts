@@ -70,6 +70,49 @@ describe('gql', () => {
     expect(wait).toHaveBeenCalledWith(1000);
   });
 
+  // The real client throws GraphqlQueryError instead of returning a Response; its body is
+  // { data, errors: { graphQLErrors: [...], message, networkStatusCode } } (shopify-api throwFailedRequest).
+  function throwingAdmin(bodies: unknown[]) {
+    let i = 0;
+    const admin: AdminClient = {
+      async graphql() {
+        const body = bodies[Math.min(i++, bodies.length - 1)] as { data?: unknown; errors?: unknown };
+        if (body.errors) {
+          const thrown = { data: body.data, errors: { graphQLErrors: body.errors, message: 'GraphQL Client: An error occurred' } };
+          throw Object.assign(new Error('Access denied'), { body: thrown });
+        }
+        return new Response(JSON.stringify(body));
+      },
+    };
+    return admin;
+  }
+
+  it('turns an error thrown with a GraphQL body into AdminError', async () => {
+    const admin = throwingAdmin([{ errors: [{ message: 'Access denied for shopifyqlQuery field.' }] }]);
+    const err = (await gql(admin, 'query {a}').catch((e) => e)) as Error;
+    expect(err).toBeInstanceOf(AdminError);
+    expect(err.message).toContain('Access denied');
+  });
+
+  it('retries a thrown THROTTLED error then succeeds', async () => {
+    const wait = vi.fn(async () => {});
+    const admin = throwingAdmin([
+      { errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] },
+      { data: { ok: true } },
+    ]);
+    expect(await gql(admin, 'query {a}', undefined, wait)).toEqual({ ok: true });
+    expect(wait).toHaveBeenCalledWith(1000);
+  });
+
+  it('rethrows a thrown error without a GraphQL body', async () => {
+    const admin: AdminClient = {
+      async graphql() {
+        throw new TypeError('fetch failed');
+      },
+    };
+    await expect(gql(admin, 'query {a}')).rejects.toBeInstanceOf(TypeError);
+  });
+
   it('gives up after 3 throttled attempts', async () => {
     const wait = vi.fn(async () => {});
     const { admin, calls } = fakeAdmin([
