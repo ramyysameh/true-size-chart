@@ -47,7 +47,7 @@ export function localDate(now: Date, timeZone: string | null | undefined): strin
   }
 }
 
-/** In-memory token bucket per shop (one process until Plan 5). */
+/** In-memory token bucket per shop: one web instance (render.yaml numInstances 1); a deploy's overlap can briefly double the cap. */
 export class RateLimiter {
   private readonly perSecond: number;
   private readonly burst: number;

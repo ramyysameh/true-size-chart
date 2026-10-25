@@ -9,8 +9,8 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
@@ -88,4 +88,11 @@ model EventSizeDaily {
   count    Int    @default(0)
 
   @@id([shop, chartKey, date, size])
+}
+
+// A named lock with an expiry, so one process at a time runs a background job.
+model JobLease {
+  name        String   @id
+  holder      String
+  lockedUntil DateTime
 }

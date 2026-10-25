@@ -7,6 +7,7 @@ import {
   type Entitlement,
   type Subscription,
 } from './entitlement';
+import { acquireLease, releaseLease, type LeaseDb } from './lease.server';
 import { PartnerError, fetchActiveSubscription } from './partner.server';
 
 export interface EntitlementDeps {
@@ -181,17 +182,41 @@ declare global {
 const REFRESH_INTERVAL_MS = 30 * 60_000;
 const FIRST_RUN_MS = 60_000;
 
+export const REFRESH_LEASE = 'entitlement-refresh';
+/** Shorter than the 30 min interval; a crashed holder's lease frees itself by the next tick. */
+export const LEASE_MS = 25 * 60_000;
+
+/** One timer tick: lease, refreshEntitlements, release. Never rejects. */
+export async function runRefresh(
+  deps: Parameters<typeof refreshEntitlements>[0] & { lease: LeaseDb; holder: string },
+): Promise<void> {
+  const { lease, holder, ...rest } = deps;
+  const now = rest.now ?? (() => new Date());
+  try {
+    if (!(await acquireLease(lease, REFRESH_LEASE, holder, LEASE_MS, now()))) return;
+    try {
+      await refreshEntitlements(rest);
+    } finally {
+      await releaseLease(lease, REFRESH_LEASE, holder, now());
+    }
+  } catch (error) {
+    console.error(`Entitlement refresh failed (${describeError(error)})`);
+  }
+}
+
 /** Starts the background refresher once per process. Never runs under tests. */
 export function startEntitlementRefresher(): void {
   if (process.env.VITEST || process.env.NODE_ENV === 'test') return;
   if (globalThis.__tscRefresher) return;
   globalThis.__tscRefresher = true;
 
+  const holder = crypto.randomUUID();
   let running = false;
   const run = () => {
     if (running) return;
     running = true;
-    refreshEntitlements()
+    import('../db.server')
+      .then(({ default: db }) => runRefresh({ lease: db, holder, db }))
       .catch((error) => console.error(`Entitlement refresh failed (${describeError(error)})`))
       .finally(() => {
         running = false;

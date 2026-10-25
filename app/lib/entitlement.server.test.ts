@@ -3,10 +3,15 @@ import { AdminError, type AdminClient } from './admin.server';
 import type { Subscription } from './entitlement';
 import {
   checkEntitlement,
+  LEASE_MS,
+  REFRESH_LEASE,
   refreshEntitlements,
+  runRefresh,
   startEntitlementRefresher,
   type EntitlementDeps,
 } from './entitlement.server';
+import { acquireLease } from './lease.server';
+import { fakeLeaseDb } from './lease.testing';
 import { PartnerError } from './partner.server';
 
 const SHOP = 'cool-shop.myshopify.com';
@@ -367,6 +372,69 @@ describe('refreshEntitlements', () => {
     for (const call of sleep.mock.calls) expect(call[0]).toBeGreaterThanOrEqual(300);
     expect(error).toHaveBeenCalledTimes(1);
     expect(String(error.mock.calls[0].join(' '))).toContain('a.myshopify.com');
+  });
+});
+
+describe('runRefresh', () => {
+  function staleShop() {
+    return fakeDb([
+      known({ shop: SHOP, entitled: true, entitlementCheckedAt: ago(7 * HOUR), entitlementWritten: true }),
+    ]);
+  }
+
+  it('lets only one of two concurrent holders refresh', async () => {
+    const { db } = staleShop();
+    const { admin } = fakeAdmin();
+    const { db: lease } = fakeLeaseDb();
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+    const adminFor = vi.fn().mockResolvedValue(admin);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const base = { db, fetchSubscription, now: () => NOW, adminFor, sleep, lease };
+
+    await Promise.all([runRefresh({ ...base, holder: 'a' }), runRefresh({ ...base, holder: 'b' })]);
+
+    expect(fetchSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the lease after a run, and also after a failed one', async () => {
+    const { db } = staleShop();
+    const { admin } = fakeAdmin();
+    const { db: lease, rows } = fakeLeaseDb();
+    const fetchSubscription = vi.fn().mockRejectedValue(new Error('partner down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const base = {
+      db,
+      fetchSubscription,
+      now: () => NOW,
+      adminFor: vi.fn().mockResolvedValue(admin),
+      sleep: vi.fn().mockResolvedValue(undefined),
+      lease,
+    };
+
+    await runRefresh({ ...base, holder: 'a' });
+
+    expect(rows.get(REFRESH_LEASE)).toMatchObject({ holder: 'a', lockedUntil: NOW });
+    expect(await acquireLease(lease, REFRESH_LEASE, 'b', LEASE_MS, new Date(NOW.getTime() + 1))).toBe(true);
+  });
+
+  it('resolves, logs once and refreshes nothing when the lease query rejects', async () => {
+    const { db } = staleShop();
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lease = {
+      jobLease: {
+        updateMany: vi.fn().mockRejectedValue(new Error('db down')),
+        create: vi.fn(),
+      },
+    } as unknown as Parameters<typeof runRefresh>[0]['lease'];
+
+    await expect(
+      runRefresh({ db, fetchSubscription, now: () => NOW, lease, holder: 'a' }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchSubscription).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0].join(' '))).toContain('db down');
   });
 });
 
