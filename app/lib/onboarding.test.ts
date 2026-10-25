@@ -42,6 +42,14 @@ describe('setupChecklist', () => {
   });
 });
 
+describe('setupChecklist labels', () => {
+  it('names the live theme, because the status comes from the published theme only', () => {
+    const items = setupChecklist({ embed: 'available', block: 'available', charts: 0, rules: 0 });
+    expect(items.find((i) => i.key === 'embed')?.label).toBe('Turn on the app embed in your live theme');
+    expect(items.find((i) => i.key === 'block')?.label).toBe('Place the size finder button in your live theme');
+  });
+});
+
 describe('safeReturnTo', () => {
   it('accepts onboarding paths only', () => {
     expect(safeReturnTo('/app/onboarding?step=2&charts=a,b')).toBe('/app/onboarding?step=2&charts=a,b');

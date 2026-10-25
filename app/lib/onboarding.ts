@@ -48,8 +48,8 @@ export function setupChecklist(s: {
   rules: number;
 }): ChecklistItem[] {
   return [
-    { key: 'embed', label: 'Turn on the app embed', done: s.embed === 'active', href: '/app/onboarding?step=4' },
-    { key: 'block', label: 'Place the size finder button on your product page', done: s.block === 'active', href: '/app/onboarding?step=4' },
+    { key: 'embed', label: 'Turn on the app embed in your live theme', done: s.embed === 'active', href: '/app/onboarding?step=4' },
+    { key: 'block', label: 'Place the size finder button in your live theme', done: s.block === 'active', href: '/app/onboarding?step=4' },
     { key: 'charts', label: 'Create a size chart', done: s.charts > 0, href: '/app/charts' },
     { key: 'rules', label: 'Assign charts to products', done: s.rules > 0, href: '/app/rules' },
     { key: 'mapping', label: 'Check size mapping', done: false, href: '/app/mapping' },
