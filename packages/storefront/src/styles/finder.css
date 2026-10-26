@@ -63,9 +63,9 @@ button { font: inherit; color: inherit; letter-spacing: inherit; background: non
   .tsc-head { padding: 12px 16px 8px; }
   .tsc-product { margin: 0 16px; padding: 8px; }
   .tsc-product img { width: 32px; height: 40px; }
-  .tsc-tabs { margin: 12px 16px 0; }
+  .tsc-tabs { margin: 8px 16px 0; }
   [role="tab"] { padding: 8px 0; }
-  .tsc-progress { margin: 12px 16px 0; }
+  .tsc-progress { margin: 10px 16px 0; }
   .tsc-body { padding: 16px; }
   .tsc-foot { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
   .tsc-back, .tsc-primary { height: 48px; }

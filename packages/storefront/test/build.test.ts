@@ -25,6 +25,9 @@ describe('build', () => {
     const compact = blocks.find((b) => (b[1] ?? '').includes('.tsc-body{padding:16px}'));
     expect(compact).toBeDefined();
     expect(compact![1]).toContain('env(safe-area-inset-bottom)');
+    // Measured live at 610 px tall: 12 px gaps left 328 px of step content; these give ≥ 330.
+    expect(compact![1]).toContain('.tsc-tabs{margin:8px16px0}');
+    expect(compact![1]).toContain('.tsc-progress{margin:10px16px0}');
     expect(compact!.index).toBeGreaterThan(css.indexOf('.tsc-body{'));
     expect(compact!.index).toBeGreaterThan(css.indexOf('.tsc-foot{'));
   }, 30_000);
