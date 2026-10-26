@@ -57,7 +57,7 @@ Must match the plan configured in Plan 4 (Partner Dashboard → Pricing content)
 
 ## Support and policies
 
-- **Privacy policy URL:** https://true-size-chart.onrender.com/privacy
+- **Privacy policy URL:** https://true-size-chart.vercel.app/privacy
 - **Support email:** zendolabs@gmail.com (`app/lib/brand.ts`)
 - **API contact email (app settings):** zendolabs@gmail.com (it must not contain "shopify")
 - **Emergency developer contact:** set by the user in Partner account settings (an email and phone number)

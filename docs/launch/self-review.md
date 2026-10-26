@@ -13,7 +13,7 @@ Run 2026-10-25 on branch `claude/plan-5-launch-readiness-99b0b8` at the end of P
 
 Each of these would have been ❌ before Plan 5; all are fixed now:
 - **2.3.1 Initiate installation from a Shopify-owned surface.** The template's landing page asked for a shop domain. It is now a static page (`app/routes/_index/route.tsx`), and `app/lib/public-pages.test.ts` guards it.
-- **3.1.1 Use a valid TLS/SSL certificate.** `application_url` was `https://example.com`. It is now `https://true-size-chart.onrender.com`, which serves Render's managed TLS.
+- **3.1.1 Use a valid TLS/SSL certificate.** `application_url` was `https://example.com`. It is now `https://true-size-chart.vercel.app`, which serves Vercel's managed TLS.
 - **1.2.2 Implement Shopify App Pricing correctly.** Resubscribing after a reinstall wrote `tsc.active` to the old installation. `afterAuth` now refreshes the installation id (Task 3).
 - **Mandatory compliance webhooks.** These are not in the self-review list but are required at submission. They are now handled at `/webhooks/compliance` and configured in `shopify.app.toml` (Task 6).
 
@@ -27,9 +27,9 @@ Each of these would have been ❌ before Plan 5; all are fixed now:
 
 ⚠️ **3.1.1 Use a valid TLS/SSL certificate**
 
-**Why this needs attention:** TLS terminates at Render, so the certificate exists only once the service is deployed.
+**Why this needs attention:** TLS terminates at Vercel, so the certificate exists only once the project is deployed.
 
-**What was detected:** `render.yaml` serves `https://true-size-chart.onrender.com`, and there is no HTTP-only path in the app. Verify after the deploy that `https://true-size-chart.onrender.com/healthz` loads with a valid certificate.
+**What was detected:** Vercel serves `https://true-size-chart.vercel.app` over HTTPS only, and there is no HTTP-only path in the app. Verify after the deploy that `https://true-size-chart.vercel.app/healthz` loads with a valid certificate.
 
 ⚠️ **5.1.2 Properly show theme app extension in the storefront**
 
@@ -95,7 +95,7 @@ These groups weren't evaluated because they don't appear to apply to this codeba
 
 ## Storefront performance and accessibility on production (Task 13 Step 3)
 
-Pending the batched live session after the Render deploy:
+Pending the production deploy on Vercel:
 - Lighthouse delta: `scripts/perf/lighthouse.mjs`, with the off and on medians recorded here. Target ≤ 3.
 - axe-core 4.10.2 on each finder step and on the size chart tab. Target: no serious or critical violations.
 - Keyboard pass: Tab order, sliders with the arrow keys and PageUp/PageDown, ESC to close, focus returning to the button, reduced motion.

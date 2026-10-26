@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
       </p>
 
       <h2>Where the data lives</h2>
-      <p>The app and its database run on Render, in the United States.</p>
+      <p>The app runs on Vercel and its database on Neon, both in the United States.</p>
 
       <h2>Retention and deletion</h2>
       <p>

@@ -1,4 +1,4 @@
-// Render's health check. Public and unauthenticated, so it says nothing beyond up or down.
+// Health check for uptime monitoring. Public and unauthenticated, so it says nothing beyond up or down.
 import db from "../db.server";
 
 export const loader = async () => {

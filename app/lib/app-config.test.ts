@@ -50,6 +50,34 @@ describe('shopify.app.toml production URLs', () => {
   });
 });
 
+describe('Vercel hosting', () => {
+  const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+
+  it('runs the entitlement job once a day (the Hobby maximum)', () => {
+    expect(vercel.crons).toEqual([{ path: '/jobs/refresh-entitlements', schedule: '0 6 * * *' }]);
+  });
+
+  it('migrates the database before building', () => {
+    expect(vercel.buildCommand).toBe('npm run vercel-build');
+    expect(pkg.scripts['vercel-build']).toBe('prisma generate && prisma migrate deploy && react-router build');
+  });
+
+  it('applies the Vercel preset only when building on Vercel', () => {
+    const config = readFileSync('react-router.config.ts', 'utf8');
+    expect(config).toMatch(/process\.env\.VERCEL \? \[vercelPreset\(\)\] : \[\]/);
+  });
+
+  it('keeps no Render configuration around', () => {
+    expect(() => readFileSync('render.yaml', 'utf8')).toThrow();
+  });
+
+  it('retries the session table check long enough for a sleeping Neon database to wake', () => {
+    const server = readFileSync('app/shopify.server.ts', 'utf8');
+    expect(server).toMatch(/connectionRetries: 6, connectionRetryIntervalMs: 2000/);
+  });
+});
+
 describe('app sources', () => {
   it('never use shopifyqlQuery or read_reports', () => {
     const files = (readdirSync('app', { recursive: true }) as string[])

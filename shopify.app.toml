@@ -2,7 +2,7 @@
 
 client_id = "87a1e91cb347cde878814b5506901348"
 name = "True: Size Chart"
-application_url = "https://true-size-chart.onrender.com"
+application_url = "https://true-size-chart.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -103,7 +103,7 @@ prefix = "apps"
 subpath = "tsc"
 
 [auth]
-redirect_urls = [ "https://true-size-chart.onrender.com/auth/callback" ]
+redirect_urls = [ "https://true-size-chart.vercel.app/auth/callback" ]
 
 [build]
 include_config_on_deploy = true

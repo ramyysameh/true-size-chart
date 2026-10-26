@@ -73,27 +73,3 @@ export function localDate(now: Date, timeZone: string | null | undefined): strin
   }
 }
 
-/** In-memory token bucket per shop: one web instance (render.yaml numInstances 1); a deploy's overlap can briefly double the cap. */
-export class RateLimiter {
-  private readonly perSecond: number;
-  private readonly burst: number;
-  private readonly now: () => number;
-  private readonly buckets = new Map<string, { tokens: number; at: number }>();
-
-  constructor(opts: { perSecond?: number; burst?: number; now?: () => number } = {}) {
-    this.perSecond = opts.perSecond ?? 10;
-    this.burst = opts.burst ?? 60;
-    this.now = opts.now ?? Date.now;
-  }
-
-  allow(shop: string): boolean {
-    const t = this.now();
-    const b = this.buckets.get(shop) ?? { tokens: this.burst, at: t };
-    b.tokens = Math.min(this.burst, b.tokens + ((t - b.at) / 1000) * this.perSecond);
-    b.at = t;
-    const ok = b.tokens >= 1;
-    if (ok) b.tokens -= 1;
-    this.buckets.set(shop, b);
-    return ok;
-  }
-}

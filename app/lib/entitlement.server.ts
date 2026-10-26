@@ -182,12 +182,7 @@ export async function refreshEntitlements(
 ): Promise<{ checked: number; changed: number }> {
   const resolved = await resolveDeps(deps);
   const sleep = deps.sleep ?? realSleep;
-  const adminFor =
-    deps.adminFor ??
-    (async (shop: string) => {
-      const { unauthenticated } = await import('../shopify.server');
-      return (await unauthenticated.admin(shop)).admin;
-    });
+  const adminFor = deps.adminFor ?? offlineAdmin;
 
   const due = await resolved.db.shopState.findMany({
     where: { entitled: true, entitlementCheckedAt: { lt: new Date(resolved.now().getTime() - REFRESH_MS) } },
@@ -207,6 +202,50 @@ export async function refreshEntitlements(
     }
   }
   return { checked, changed };
+}
+
+async function offlineAdmin(shop: string): Promise<AdminClient> {
+  const { unauthenticated } = await import('../shopify.server');
+  return (await unauthenticated.admin(shop)).admin;
+}
+
+const SHOP_LEASE_MS = 60_000;
+
+/**
+ * Re-checks one entitled shop whose last confirmation is older than REFRESH_MS. Called in the
+ * background after storefront events, so on serverless hosting a cancellation still turns the
+ * storefront off within hours of the next shopper visit (the daily cron covers quiet shops).
+ * A per-shop lease keeps concurrent events from asking the Partner API twice. Never rejects.
+ */
+export async function refreshShopIfDue(
+  shop: string,
+  deps: Partial<EntitlementDeps> & {
+    adminFor?: (shop: string) => Promise<AdminClient>;
+    lease?: LeaseDb;
+    holder?: string;
+  } = {},
+): Promise<void> {
+  try {
+    const resolved = await resolveDeps(deps);
+    const state = await resolved.db.shopState.findUnique({
+      where: { shop },
+      select: { entitled: true, entitlementCheckedAt: true },
+    });
+    const age = state?.entitlementCheckedAt ? resolved.now().getTime() - state.entitlementCheckedAt.getTime() : null;
+    if (!state?.entitled || age === null || age < REFRESH_MS) return;
+
+    const lease = deps.lease ?? resolved.db;
+    const holder = deps.holder ?? crypto.randomUUID();
+    const name = `refresh:${shop}`;
+    if (!(await acquireLease(lease, name, holder, SHOP_LEASE_MS, resolved.now()))) return;
+    try {
+      await checkEntitlement(await (deps.adminFor ?? offlineAdmin)(shop), shop, { fresh: true, deps: resolved });
+    } finally {
+      await releaseLease(lease, name, holder, resolved.now());
+    }
+  } catch (error) {
+    console.error(`Entitlement refresh for ${shop} failed (${describeError(error)})`);
+  }
 }
 
 declare global {
@@ -239,9 +278,14 @@ export async function runRefresh(
   }
 }
 
-/** Starts the background refresher once per process. Never runs under tests. */
+/**
+ * Starts the background refresher once per process. Never runs under tests, nor on Vercel, where
+ * functions don't stay alive between requests: there the daily cron (/jobs/refresh-entitlements)
+ * and refreshShopIfDue after storefront events do the same work.
+ */
 export function startEntitlementRefresher(): void {
   if (process.env.VITEST || process.env.NODE_ENV === 'test') return;
+  if (process.env.VERCEL) return;
   if (globalThis.__tscRefresher) return;
   globalThis.__tscRefresher = true;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { localDate, MAX_EVENT_BYTES, parseEvent, RateLimiter, readCapped } from './events';
+import { localDate, MAX_EVENT_BYTES, parseEvent, readCapped } from './events';
 
 describe('parseEvent', () => {
   it('accepts the three valid shapes', () => {
@@ -79,35 +79,6 @@ describe('localDate', () => {
     expect(localDate(now, null)).toBe('2026-10-24');
     expect(localDate(now, undefined)).toBe('2026-10-24');
     expect(localDate(new Date('2026-10-24T23:59:59Z'), null)).toBe('2026-10-24');
-  });
-});
-
-describe('RateLimiter', () => {
-  it('allows a burst of 60, refuses the 61st, refills at 10/s', () => {
-    let t = 1_000_000;
-    const rl = new RateLimiter({ now: () => t });
-    for (let i = 0; i < 60; i++) expect(rl.allow('a.myshopify.com')).toBe(true);
-    expect(rl.allow('a.myshopify.com')).toBe(false);
-    t += 100;
-    expect(rl.allow('a.myshopify.com')).toBe(true);
-    expect(rl.allow('a.myshopify.com')).toBe(false);
-  });
-
-  it('keeps a bucket per shop', () => {
-    const t = 0;
-    const rl = new RateLimiter({ burst: 1, now: () => t });
-    expect(rl.allow('a')).toBe(true);
-    expect(rl.allow('a')).toBe(false);
-    expect(rl.allow('b')).toBe(true);
-  });
-
-  it('never refills above the burst', () => {
-    let t = 0;
-    const rl = new RateLimiter({ perSecond: 10, burst: 2, now: () => t });
-    t += 60_000;
-    expect(rl.allow('a')).toBe(true);
-    expect(rl.allow('a')).toBe(true);
-    expect(rl.allow('a')).toBe(false);
   });
 });
 

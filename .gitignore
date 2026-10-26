@@ -35,3 +35,6 @@ packages/engine/data/
 .env
 scripts/dev/link-chart.variables.json
 scripts/perf/results/
+
+# Vercel build output and local project link
+.vercel/

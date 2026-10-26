@@ -6,6 +6,7 @@ import {
   LEASE_MS,
   REFRESH_LEASE,
   refreshEntitlements,
+  refreshShopIfDue,
   refreshShopContext,
   runRefresh,
   startEntitlementRefresher,
@@ -449,6 +450,81 @@ describe('startEntitlementRefresher', () => {
     expect(setIntervalSpy).not.toHaveBeenCalled();
     expect(setTimeoutSpy).not.toHaveBeenCalled();
     expect((globalThis as { __tscRefresher?: unknown }).__tscRefresher).toBeUndefined();
+  });
+});
+
+describe('refreshShopIfDue', () => {
+  const run = (rows: Row[], opts: { fetch?: EntitlementDeps['fetchSubscription']; lease?: ReturnType<typeof fakeLeaseDb> } = {}) => {
+    const { db, table } = fakeDb(rows);
+    const { admin, writes } = fakeAdmin();
+    const fetchSubscription = vi.fn(opts.fetch ?? (async () => null));
+    const adminFor = vi.fn().mockResolvedValue(admin);
+    const lease = opts.lease ?? fakeLeaseDb();
+    const done = refreshShopIfDue(SHOP, { db, fetchSubscription, now: () => NOW, adminFor, lease: lease.db, holder: 'h1' });
+    return { done, table, writes, fetchSubscription, adminFor, lease };
+  };
+
+  it('re-checks an entitled shop last confirmed over 6 h ago and turns it off when the subscription is gone', async () => {
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR), entitlementWritten: true })]);
+    await r.done;
+    expect(r.fetchSubscription).toHaveBeenCalledTimes(1);
+    expect(r.table.get(SHOP)!.entitled).toBe(false);
+    expect(r.writes()).toHaveLength(1);
+  });
+
+  it('does nothing for a shop confirmed within 6 h', async () => {
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(1 * HOUR) })]);
+    await r.done;
+    expect(r.adminFor).not.toHaveBeenCalled();
+    expect(r.fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for an inactive or unknown shop', async () => {
+    const inactive = run([known({ entitled: false, entitlementCheckedAt: ago(7 * HOUR) })]);
+    await inactive.done;
+    expect(inactive.fetchSubscription).not.toHaveBeenCalled();
+    const unknown = run([]);
+    await unknown.done;
+    expect(unknown.fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  it('skips while another request holds the shop lease, and releases its own', async () => {
+    const lease = fakeLeaseDb();
+    await acquireLease(lease.db, `refresh:${SHOP}`, 'other', 60_000, NOW);
+    const busy = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR) })], { lease });
+    await busy.done;
+    expect(busy.fetchSubscription).not.toHaveBeenCalled();
+
+    const free = fakeLeaseDb();
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR) })], { lease: free });
+    await r.done;
+    // Released: free from the next instant on.
+    expect(await acquireLease(free.db, `refresh:${SHOP}`, 'next', 60_000, new Date(NOW.getTime() + 1))).toBe(true);
+  });
+
+  it('never rejects: a Partner failure past grace is logged and swallowed', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(30 * HOUR) })], {
+      fetch: async () => { throw new PartnerError('down'); },
+    });
+    await expect(r.done).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('startEntitlementRefresher on Vercel', () => {
+  it('starts no timers when VERCEL is set: the daily cron and request-driven checks replace them', () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('VERCEL', '1');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    try {
+      startEntitlementRefresher();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      expect((globalThis as { __tscRefresher?: unknown }).__tscRefresher).toBeUndefined();
+    } finally {
+      delete (globalThis as { __tscRefresher?: unknown }).__tscRefresher;
+    }
   });
 });
 

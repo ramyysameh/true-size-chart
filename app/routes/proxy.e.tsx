@@ -5,10 +5,11 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { localDate, MAX_EVENT_BYTES, parseEvent, RateLimiter, readCapped } from "../lib/events";
+import { waitUntil } from "@vercel/functions";
+import { localDate, MAX_EVENT_BYTES, parseEvent, readCapped } from "../lib/events";
 import { recordEvent } from "../lib/events.server";
-
-const limiter = new RateLimiter();
+import { allowEvent } from "../lib/rate.server";
+import { refreshShopIfDue } from "../lib/entitlement.server";
 const noContent = () => new Response(null, { status: 204 });
 
 export const loader = () => new Response(null, { status: 405 });
@@ -22,9 +23,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shop = session.shop;
     const body = await readCapped(request, MAX_EVENT_BYTES);
     const ev = body === null ? null : parseEvent(body);
-    if (!ev || !limiter.allow(shop)) return noContent();
+    if (!ev || !(await allowEvent(db, shop, new Date()))) return noContent();
     const state = await db.shopState.findUnique({ where: { shop }, select: { timezone: true } });
     await recordEvent(db, shop, ev, localDate(new Date(), state?.timezone));
+    // Storefront traffic keeps the subscription check fresh on serverless hosting; runs after the response.
+    waitUntil(refreshShopIfDue(shop));
   } catch (err) {
     if (err instanceof Response) throw err;
     // Beacons can't retry and a failure must never surface on the storefront.

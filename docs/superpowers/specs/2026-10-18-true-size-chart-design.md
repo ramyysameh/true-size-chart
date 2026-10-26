@@ -74,7 +74,7 @@ Photo/body scanning, AI import of charts from images or URLs (planned v2), footw
                                              recommendation engine runs in browser
 ```
 
-- **Scaffold**: `shopify app init` with the **React Router** template (TypeScript, `@shopify/shopify-app-react-router`), Prisma on **PostgreSQL**, admin UI in **Polaris web components** (`polaris-app-home`). Hosting: Render, decided 2026-10-25 [user]: one always-on Docker web service and Render Postgres in Ohio, declared in `render.yaml` (see Plan 5).
+- **Scaffold**: `shopify app init` with the **React Router** template (TypeScript, `@shopify/shopify-app-react-router`), Prisma on **PostgreSQL**, admin UI in **Polaris web components** (`polaris-app-home`). Hosting: Vercel Hobby with Neon Postgres, decided 2026-10-26 [user] (replacing the 2026-10-25 Render choice): serverless functions, a daily Vercel cron for the subscription refresh, and the event rate limit in Postgres (see Plan 5 and `vercel.json`).
 - **Monorepo package `packages/engine`**: a pure TypeScript recommendation engine with no DOM. It is used by both the storefront bundle and the admin preview, so there is one source of truth with unit and golden tests.
 - **Storefront bundle**: vanilla TS custom element `<true-size-finder>` built with esbuild into the extension's `assets/`. No framework; this keeps it under 15 KB gzipped.
 
