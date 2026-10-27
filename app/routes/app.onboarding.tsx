@@ -4,6 +4,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { CATEGORIES, TEMPLATES } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
+import { authenticatePro } from "../lib/gate.server";
 import db from "../db.server";
 import { gql } from "../lib/admin.server";
 import { markRulesManaged, requestSync } from "../lib/assign.server";
@@ -62,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session, redirect } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticatePro(request);
   const shop = session.shop;
   const url = new URL(request.url);
   const handles = parseChartHandles(url.searchParams.get("charts"));

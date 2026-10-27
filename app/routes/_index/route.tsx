@@ -1,11 +1,10 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { redirect, Form, useActionData, useLoaderData } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
 
-import { login } from "../../shopify.server";
-import { loginErrorMessage } from "./error.server";
-
+import { APP_NAME, SUPPORT_EMAIL } from "../../lib/brand";
 import styles from "./styles.module.css";
 
+// Public landing page. Installs start from the Shopify App Store, never from a shop-domain form here.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
 
@@ -13,53 +12,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 
-  return { showForm: Boolean(login) };
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return { errors };
+  return null;
 };
 
 export default function App() {
-  const { showForm } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const errors = actionData?.errors;
-
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>{APP_NAME}</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          A size finder for your product pages: shoppers get one clear size from their height and weight.
         </p>
-        {showForm && (
-          <Form className={styles.form} method="post">
-            <label className={styles.label}>
-              <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>{errors?.shop ?? "e.g: my-shop-domain.myshopify.com"}</span>
-            </label>
-            <button className={styles.button} type="submit">
-              Log in
-            </button>
-          </Form>
-        )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Size finder</strong>. Two drags and a few taps give each shopper one recommended size, with
+            how it fits at the chest, waist and hips.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Size chart tab</strong>. The classic table in cm or inches, with how-to-measure notes, for
+            shoppers who want the numbers.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Assignment rules</strong>. Assign charts by product, collection, type, vendor or tag, and new
+            products pick up the right chart on their own.
           </li>
         </ul>
+        <p className={styles.links}>
+          <a href="/privacy">Privacy policy</a> · <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+        </p>
       </div>
     </div>
   );

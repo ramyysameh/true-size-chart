@@ -7,6 +7,7 @@ import {
   type Entitlement,
   type Subscription,
 } from './entitlement';
+import { acquireLease, releaseLease, type LeaseDb } from './lease.server';
 import { PartnerError, fetchActiveSubscription } from './partner.server';
 
 export interface EntitlementDeps {
@@ -131,6 +132,41 @@ export async function checkEntitlement(
   return active ? { active: true, source: 'partner' } : { active: false };
 }
 
+/**
+ * Re-reads the shop's identity after every OAuth / token exchange and stores it, so a reinstall
+ * (whose uninstall webhook may never have run) points `tsc.active` at the new installation.
+ * `entitlementWritten` is always cleared so the next real check rewrites the metafield; a changed
+ * installation id also clears `entitlementCheckedAt`, because a reinstall can mean another subscription.
+ * Never throws: an auth must not fail because of this.
+ */
+export async function refreshShopContext(
+  admin: AdminClient,
+  shop: string,
+  deps: Partial<Pick<EntitlementDeps, 'db'>> = {},
+): Promise<void> {
+  try {
+    const { db } = await resolveDeps(deps);
+    const ctx = await gql<ShopContextData>(admin, SHOP_CONTEXT);
+    const known = {
+      shopGid: ctx.shop.id,
+      installationId: ctx.currentAppInstallation.id,
+      timezone: ctx.shop.ianaTimezone ?? null,
+    };
+    const previous = await db.shopState.findUnique({ where: { shop } });
+    const reset =
+      previous?.installationId === known.installationId
+        ? { entitlementWritten: null }
+        : { entitlementWritten: null, entitlementCheckedAt: null };
+    await db.shopState.upsert({
+      where: { shop },
+      create: { shop, ...known, ...reset },
+      update: { ...known, ...reset },
+    });
+  } catch (error) {
+    console.error(`Shop context refresh for ${shop} failed (${describeError(error)})`);
+  }
+}
+
 const SPACING_MS = 300; // Partner API allows 4 requests/s per client, shared with admin loads.
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -146,12 +182,7 @@ export async function refreshEntitlements(
 ): Promise<{ checked: number; changed: number }> {
   const resolved = await resolveDeps(deps);
   const sleep = deps.sleep ?? realSleep;
-  const adminFor =
-    deps.adminFor ??
-    (async (shop: string) => {
-      const { unauthenticated } = await import('../shopify.server');
-      return (await unauthenticated.admin(shop)).admin;
-    });
+  const adminFor = deps.adminFor ?? offlineAdmin;
 
   const due = await resolved.db.shopState.findMany({
     where: { entitled: true, entitlementCheckedAt: { lt: new Date(resolved.now().getTime() - REFRESH_MS) } },
@@ -173,6 +204,50 @@ export async function refreshEntitlements(
   return { checked, changed };
 }
 
+async function offlineAdmin(shop: string): Promise<AdminClient> {
+  const { unauthenticated } = await import('../shopify.server');
+  return (await unauthenticated.admin(shop)).admin;
+}
+
+const SHOP_LEASE_MS = 60_000;
+
+/**
+ * Re-checks one entitled shop whose last confirmation is older than REFRESH_MS. Called in the
+ * background after storefront events, so on serverless hosting a cancellation still turns the
+ * storefront off within hours of the next shopper visit (the daily cron covers quiet shops).
+ * A per-shop lease keeps concurrent events from asking the Partner API twice. Never rejects.
+ */
+export async function refreshShopIfDue(
+  shop: string,
+  deps: Partial<EntitlementDeps> & {
+    adminFor?: (shop: string) => Promise<AdminClient>;
+    lease?: LeaseDb;
+    holder?: string;
+  } = {},
+): Promise<void> {
+  try {
+    const resolved = await resolveDeps(deps);
+    const state = await resolved.db.shopState.findUnique({
+      where: { shop },
+      select: { entitled: true, entitlementCheckedAt: true },
+    });
+    const age = state?.entitlementCheckedAt ? resolved.now().getTime() - state.entitlementCheckedAt.getTime() : null;
+    if (!state?.entitled || age === null || age < REFRESH_MS) return;
+
+    const lease = deps.lease ?? resolved.db;
+    const holder = deps.holder ?? crypto.randomUUID();
+    const name = `refresh:${shop}`;
+    if (!(await acquireLease(lease, name, holder, SHOP_LEASE_MS, resolved.now()))) return;
+    try {
+      await checkEntitlement(await (deps.adminFor ?? offlineAdmin)(shop), shop, { fresh: true, deps: resolved });
+    } finally {
+      await releaseLease(lease, name, holder, resolved.now());
+    }
+  } catch (error) {
+    console.error(`Entitlement refresh for ${shop} failed (${describeError(error)})`);
+  }
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var __tscRefresher: boolean | undefined;
@@ -181,17 +256,46 @@ declare global {
 const REFRESH_INTERVAL_MS = 30 * 60_000;
 const FIRST_RUN_MS = 60_000;
 
-/** Starts the background refresher once per process. Never runs under tests. */
+export const REFRESH_LEASE = 'entitlement-refresh';
+/** Shorter than the 30 min interval; a crashed holder's lease frees itself by the next tick. */
+export const LEASE_MS = 25 * 60_000;
+
+/** One timer tick: lease, refreshEntitlements, release. Never rejects. */
+export async function runRefresh(
+  deps: Parameters<typeof refreshEntitlements>[0] & { lease: LeaseDb; holder: string },
+): Promise<void> {
+  const { lease, holder, ...rest } = deps;
+  const now = rest.now ?? (() => new Date());
+  try {
+    if (!(await acquireLease(lease, REFRESH_LEASE, holder, LEASE_MS, now()))) return;
+    try {
+      await refreshEntitlements(rest);
+    } finally {
+      await releaseLease(lease, REFRESH_LEASE, holder, now());
+    }
+  } catch (error) {
+    console.error(`Entitlement refresh failed (${describeError(error)})`);
+  }
+}
+
+/**
+ * Starts the background refresher once per process. Never runs under tests, nor on Vercel, where
+ * functions don't stay alive between requests: there the daily cron (/jobs/refresh-entitlements)
+ * and refreshShopIfDue after storefront events do the same work.
+ */
 export function startEntitlementRefresher(): void {
   if (process.env.VITEST || process.env.NODE_ENV === 'test') return;
+  if (process.env.VERCEL) return;
   if (globalThis.__tscRefresher) return;
   globalThis.__tscRefresher = true;
 
+  const holder = crypto.randomUUID();
   let running = false;
   const run = () => {
     if (running) return;
     running = true;
-    refreshEntitlements()
+    import('../db.server')
+      .then(({ default: db }) => runRefresh({ lease: db, holder, db }))
       .catch((error) => console.error(`Entitlement refresh failed (${describeError(error)})`))
       .finally(() => {
         running = false;

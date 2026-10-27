@@ -29,7 +29,7 @@ describe('the app paywall gate', () => {
     delete process.env.SHOPIFY_APP_HANDLE;
     setup();
     mocks.check.mockResolvedValue({ active: false });
-    const res = await run();
+    const res = await run().catch((e: unknown) => e);
     expect(mocks.redirect).toHaveBeenCalledWith(
       'https://admin.shopify.com/store/cool-shop/charges/true-size-chart/pricing_plans',
       { target: '_top' },

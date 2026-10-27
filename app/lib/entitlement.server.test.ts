@@ -3,10 +3,17 @@ import { AdminError, type AdminClient } from './admin.server';
 import type { Subscription } from './entitlement';
 import {
   checkEntitlement,
+  LEASE_MS,
+  REFRESH_LEASE,
   refreshEntitlements,
+  refreshShopIfDue,
+  refreshShopContext,
+  runRefresh,
   startEntitlementRefresher,
   type EntitlementDeps,
 } from './entitlement.server';
+import { acquireLease } from './lease.server';
+import { fakeLeaseDb } from './lease.testing';
 import { PartnerError } from './partner.server';
 
 const SHOP = 'cool-shop.myshopify.com';
@@ -83,7 +90,9 @@ interface Call {
   variables?: Record<string, unknown>;
 }
 
-function fakeAdmin(opts: { userErrors?: { field: string[]; message: string }[] } = {}) {
+function fakeAdmin(
+  opts: { userErrors?: { field: string[]; message: string }[]; installation?: string } = {},
+) {
   const calls: Call[] = [];
   const admin: AdminClient = {
     async graphql(query, options) {
@@ -93,7 +102,7 @@ function fakeAdmin(opts: { userErrors?: { field: string[]; message: string }[] }
           JSON.stringify({
             data: {
               shop: { id: SHOP_GID, myshopifyDomain: SHOP, ianaTimezone: 'America/Los_Angeles' },
-              currentAppInstallation: { id: INSTALL },
+              currentAppInstallation: { id: opts.installation ?? INSTALL },
             },
           }),
         );
@@ -370,6 +379,69 @@ describe('refreshEntitlements', () => {
   });
 });
 
+describe('runRefresh', () => {
+  function staleShop() {
+    return fakeDb([
+      known({ shop: SHOP, entitled: true, entitlementCheckedAt: ago(7 * HOUR), entitlementWritten: true }),
+    ]);
+  }
+
+  it('lets only one of two concurrent holders refresh', async () => {
+    const { db } = staleShop();
+    const { admin } = fakeAdmin();
+    const { db: lease } = fakeLeaseDb();
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+    const adminFor = vi.fn().mockResolvedValue(admin);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const base = { db, fetchSubscription, now: () => NOW, adminFor, sleep, lease };
+
+    await Promise.all([runRefresh({ ...base, holder: 'a' }), runRefresh({ ...base, holder: 'b' })]);
+
+    expect(fetchSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the lease after a run, and also after a failed one', async () => {
+    const { db } = staleShop();
+    const { admin } = fakeAdmin();
+    const { db: lease, rows } = fakeLeaseDb();
+    const fetchSubscription = vi.fn().mockRejectedValue(new Error('partner down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const base = {
+      db,
+      fetchSubscription,
+      now: () => NOW,
+      adminFor: vi.fn().mockResolvedValue(admin),
+      sleep: vi.fn().mockResolvedValue(undefined),
+      lease,
+    };
+
+    await runRefresh({ ...base, holder: 'a' });
+
+    expect(rows.get(REFRESH_LEASE)).toMatchObject({ holder: 'a', lockedUntil: NOW });
+    expect(await acquireLease(lease, REFRESH_LEASE, 'b', LEASE_MS, new Date(NOW.getTime() + 1))).toBe(true);
+  });
+
+  it('resolves, logs once and refreshes nothing when the lease query rejects', async () => {
+    const { db } = staleShop();
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lease = {
+      jobLease: {
+        updateMany: vi.fn().mockRejectedValue(new Error('db down')),
+        create: vi.fn(),
+      },
+    } as unknown as Parameters<typeof runRefresh>[0]['lease'];
+
+    await expect(
+      runRefresh({ db, fetchSubscription, now: () => NOW, lease, holder: 'a' }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchSubscription).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0].join(' '))).toContain('db down');
+  });
+});
+
 describe('startEntitlementRefresher', () => {
   it('is a no-op under Vitest', () => {
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
@@ -378,5 +450,181 @@ describe('startEntitlementRefresher', () => {
     expect(setIntervalSpy).not.toHaveBeenCalled();
     expect(setTimeoutSpy).not.toHaveBeenCalled();
     expect((globalThis as { __tscRefresher?: unknown }).__tscRefresher).toBeUndefined();
+  });
+});
+
+describe('refreshShopIfDue', () => {
+  const run = (rows: Row[], opts: { fetch?: EntitlementDeps['fetchSubscription']; lease?: ReturnType<typeof fakeLeaseDb> } = {}) => {
+    const { db, table } = fakeDb(rows);
+    const { admin, writes } = fakeAdmin();
+    const fetchSubscription = vi.fn(opts.fetch ?? (async () => null));
+    const adminFor = vi.fn().mockResolvedValue(admin);
+    const lease = opts.lease ?? fakeLeaseDb();
+    const done = refreshShopIfDue(SHOP, { db, fetchSubscription, now: () => NOW, adminFor, lease: lease.db, holder: 'h1' });
+    return { done, table, writes, fetchSubscription, adminFor, lease };
+  };
+
+  it('re-checks an entitled shop last confirmed over 6 h ago and turns it off when the subscription is gone', async () => {
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR), entitlementWritten: true })]);
+    await r.done;
+    expect(r.fetchSubscription).toHaveBeenCalledTimes(1);
+    expect(r.table.get(SHOP)!.entitled).toBe(false);
+    expect(r.writes()).toHaveLength(1);
+  });
+
+  it('does nothing for a shop confirmed within 6 h', async () => {
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(1 * HOUR) })]);
+    await r.done;
+    expect(r.adminFor).not.toHaveBeenCalled();
+    expect(r.fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for an inactive or unknown shop', async () => {
+    const inactive = run([known({ entitled: false, entitlementCheckedAt: ago(7 * HOUR) })]);
+    await inactive.done;
+    expect(inactive.fetchSubscription).not.toHaveBeenCalled();
+    const unknown = run([]);
+    await unknown.done;
+    expect(unknown.fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  it('skips while another request holds the shop lease, and releases its own', async () => {
+    const lease = fakeLeaseDb();
+    await acquireLease(lease.db, `refresh:${SHOP}`, 'other', 60_000, NOW);
+    const busy = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR) })], { lease });
+    await busy.done;
+    expect(busy.fetchSubscription).not.toHaveBeenCalled();
+
+    const free = fakeLeaseDb();
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(7 * HOUR) })], { lease: free });
+    await r.done;
+    // Released: free from the next instant on.
+    expect(await acquireLease(free.db, `refresh:${SHOP}`, 'next', 60_000, new Date(NOW.getTime() + 1))).toBe(true);
+  });
+
+  it('never rejects: a Partner failure past grace is logged and swallowed', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = run([known({ entitled: true, entitlementCheckedAt: ago(30 * HOUR) })], {
+      fetch: async () => { throw new PartnerError('down'); },
+    });
+    await expect(r.done).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('startEntitlementRefresher on Vercel', () => {
+  it('starts no timers when VERCEL is set: the daily cron and request-driven checks replace them', () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('VERCEL', '1');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    try {
+      startEntitlementRefresher();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      expect((globalThis as { __tscRefresher?: unknown }).__tscRefresher).toBeUndefined();
+    } finally {
+      delete (globalThis as { __tscRefresher?: unknown }).__tscRefresher;
+    }
+  });
+});
+
+describe('refreshShopContext', () => {
+  const INSTALL_2 = 'gid://shopify/AppInstallation/2';
+
+  it('stores a new installation id and clears both the written flag and the check time', async () => {
+    const { db, table } = fakeDb([
+      known({ installationId: 'gid://shopify/AppInstallation/1', entitled: true, entitlementWritten: true, entitlementCheckedAt: ago(60_000) }),
+    ]);
+    const { admin } = fakeAdmin({ installation: INSTALL_2 });
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    const row = table.get(SHOP)!;
+    expect(row.installationId).toBe(INSTALL_2);
+    expect(row.shopGid).toBe(SHOP_GID);
+    expect(row.timezone).toBe('America/Los_Angeles');
+    expect(row.entitlementWritten).toBeNull();
+    expect(row.entitlementCheckedAt).toBeNull();
+  });
+
+  it('keeps the check time when the installation id is unchanged, but still clears the written flag', async () => {
+    const checked = ago(60_000);
+    const { db, table } = fakeDb([known({ entitled: true, entitlementWritten: true, entitlementCheckedAt: checked })]);
+    const { admin } = fakeAdmin();
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    const row = table.get(SHOP)!;
+    expect(row.installationId).toBe(INSTALL);
+    expect(row.entitlementWritten).toBeNull();
+    expect(row.entitlementCheckedAt).toEqual(checked);
+  });
+
+  it('creates the row when the shop has none', async () => {
+    const { db, table } = fakeDb();
+    const { admin } = fakeAdmin();
+
+    await refreshShopContext(admin, SHOP, { db });
+
+    expect(table.get(SHOP)).toMatchObject({
+      shop: SHOP,
+      shopGid: SHOP_GID,
+      installationId: INSTALL,
+      timezone: 'America/Los_Angeles',
+      entitlementWritten: null,
+      entitlementCheckedAt: null,
+    });
+  });
+
+  it('resolves and logs once, without a response body, when the query fails', async () => {
+    const { db, table } = fakeDb([known()]);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const admin: AdminClient = {
+      async graphql() {
+        return new Response(JSON.stringify({ errors: [{ message: 'Access denied' }], secret: 'tok_123' }));
+      },
+    };
+
+    await expect(refreshShopContext(admin, SHOP, { db })).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = String(error.mock.calls[0].join(' '));
+    expect(line).toContain(`Shop context refresh for ${SHOP} failed (`);
+    expect(line).not.toContain('tok_123');
+    expect(table.get(SHOP)).toEqual(known());
+  });
+
+  it('resolves and logs once when the database write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const db = {
+      shopState: {
+        findUnique: vi.fn().mockRejectedValue(new Error('db down')),
+      },
+    } as unknown as EntitlementDeps['db'];
+
+    await expect(refreshShopContext(fakeAdmin().admin, SHOP, { db })).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a reinstall the next check writes tsc.active once to the new installation (Review Focus 1)', async () => {
+    const { db } = fakeDb([
+      known({
+        installationId: 'gid://shopify/AppInstallation/1',
+        entitled: true,
+        entitlementWritten: true,
+        entitlementCheckedAt: ago(60_000),
+      }),
+    ]);
+    const { admin, writes } = fakeAdmin({ installation: INSTALL_2 });
+    const fetchSubscription = vi.fn().mockResolvedValue(SUB);
+
+    await refreshShopContext(admin, SHOP, { db });
+    const result = await checkEntitlement(admin, SHOP, { deps: deps(db, fetchSubscription) });
+
+    expect(result).toEqual({ active: true, source: 'partner' });
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0].variables).toEqual({
+      metafields: [{ ownerId: INSTALL_2, namespace: 'tsc', key: 'active', type: 'boolean', value: 'true' }],
+    });
   });
 });

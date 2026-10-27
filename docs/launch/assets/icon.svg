@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <!-- True: Size Chart app icon: a T-shirt with a check, the finder's one clear size. No text, no marks. -->
+  <rect width="1200" height="1200" fill="#111111"/>
+  <g fill="none" stroke="#f7f7f5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- The shirt spans x 190–1010 (820 px) and y 230–990: inside the 750–900 px band, 75 px margin kept. -->
+    <path stroke-width="44" d="M470 250
+      C510 300 690 300 730 250
+      L990 360 L900 560 L820 520
+      L820 960 L380 960 L380 520
+      L300 560 L210 360 Z"/>
+    <!-- The check on the chest. -->
+    <path stroke-width="52" d="M480 690 L570 780 L740 600"/>
+  </g>
+</svg>

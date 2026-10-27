@@ -3,6 +3,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { TEMPLATES } from "@true-size-chart/engine";
 import { authenticate } from "../shopify.server";
+import { authenticatePro } from "../lib/gate.server";
 import db from "../db.server";
 import { deleteChart, listChartItems, saveChart } from "../lib/charts.server";
 import { draftFromTemplate } from "../lib/chart-model";
@@ -33,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session, redirect } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticatePro(request);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
 

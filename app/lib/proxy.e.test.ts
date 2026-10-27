@@ -1,10 +1,13 @@
 // Lives in app/lib because flatRoutes would treat a file in app/routes as a route.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   appProxy: vi.fn(),
   findShopState: vi.fn(),
   recordEvent: vi.fn(),
+  rateUpsert: vi.fn(),
+  waitUntil: vi.fn(),
+  refreshShopIfDue: vi.fn(),
 }));
 
 vi.mock('../shopify.server', () => ({ authenticate: { public: { appProxy: mocks.appProxy } } }));
@@ -13,8 +16,11 @@ vi.mock('../db.server', () => ({
     shopState: { findUnique: mocks.findShopState },
     eventDaily: {},
     eventSizeDaily: {},
+    eventRate: { upsert: mocks.rateUpsert },
   },
 }));
+vi.mock('@vercel/functions', () => ({ waitUntil: mocks.waitUntil }));
+vi.mock('./entitlement.server', () => ({ refreshShopIfDue: mocks.refreshShopIfDue }));
 vi.mock('./events.server', () => ({ recordEvent: mocks.recordEvent, MAX_SIZES_PER_DAY: 30 }));
 
 const { action, loader } = await import('../routes/proxy.e');
@@ -29,6 +35,11 @@ const post = (body: string) =>
       body,
     }),
   } as never);
+
+beforeEach(() => {
+  // Within the cap unless a test says otherwise.
+  mocks.rateUpsert.mockResolvedValue({ count: 1 });
+});
 
 afterEach(() => vi.resetAllMocks());
 
@@ -86,6 +97,14 @@ describe('app proxy event route', () => {
     expect(mocks.findShopState).not.toHaveBeenCalled();
   });
 
+  it('answers 204 to a 50 KB body without recording', async () => {
+    mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
+    const res = await post(JSON.stringify({ e: 'open', c: 'tee', pad: 'x'.repeat(50_000) }));
+    expect(res.status).toBe(204);
+    expect(mocks.recordEvent).not.toHaveBeenCalled();
+    expect(mocks.findShopState).not.toHaveBeenCalled();
+  });
+
   it('answers 204 when the db throws', async () => {
     mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
     mocks.findShopState.mockResolvedValue(null);
@@ -117,17 +136,31 @@ describe('app proxy event route', () => {
     expect(mocks.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('drops events over the per-shop rate cap', async () => {
-    const shop = 'flood.myshopify.com';
-    mocks.appProxy.mockResolvedValue({ session: { shop } });
+  it('drops events over the per-shop rate cap counted in Postgres', async () => {
+    mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
+    mocks.findShopState.mockResolvedValue(null);
+    mocks.rateUpsert.mockResolvedValue({ count: 101 });
+    const res = await post('{"e":"open","c":"tee"}');
+    expect(res.status).toBe(204);
+    expect(mocks.rateUpsert).toHaveBeenCalledTimes(1);
+    expect(mocks.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('counts junk against nothing: the cap is only consulted for valid events', async () => {
+    mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
+    await post('not json');
+    expect(mocks.rateUpsert).not.toHaveBeenCalled();
+  });
+
+  it('schedules a background entitlement check for the shop after recording', async () => {
+    mocks.appProxy.mockResolvedValue({ session: { shop: SHOP } });
     mocks.findShopState.mockResolvedValue(null);
     mocks.recordEvent.mockResolvedValue(undefined);
-    const results = [];
-    for (let i = 0; i < 100; i++) results.push((await post('{"e":"open","c":"tee"}')).status);
-    expect(new Set(results)).toEqual(new Set([204]));
-    // Burst of 60; a few tokens may refill while the loop runs.
-    expect(mocks.recordEvent.mock.calls.length).toBeGreaterThanOrEqual(60);
-    expect(mocks.recordEvent.mock.calls.length).toBeLessThan(70);
+    const pending = Promise.resolve();
+    mocks.refreshShopIfDue.mockReturnValue(pending);
+    await post('{"e":"open","c":"tee"}');
+    expect(mocks.refreshShopIfDue).toHaveBeenCalledWith(SHOP);
+    expect(mocks.waitUntil).toHaveBeenCalledWith(pending);
   });
 
   it('answers 405 to GET', async () => {

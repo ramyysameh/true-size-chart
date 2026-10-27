@@ -4,6 +4,7 @@ import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { authenticatePro } from "../lib/gate.server";
 import db from "../db.server";
 import { gql } from "../lib/admin.server";
 import { listCharts } from "../lib/charts.server";
@@ -56,7 +57,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await authenticatePro(request);
   const shop = session.shop;
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");

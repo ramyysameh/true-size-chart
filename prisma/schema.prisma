@@ -9,8 +9,10 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Migrations need a direct (unpooled) connection; the app runs on the pooled DATABASE_URL.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Session {
@@ -65,6 +67,8 @@ model ShopState {
   entitled             Boolean   @default(false)
   entitlementCheckedAt DateTime? // last confirmed Partner answer
   entitlementWritten   Boolean? // last value written to tsc.active (null = never)
+  proxyStatus          String? // ok | moved | unknown, from probing /apps/tsc/ping
+  proxyCheckedAt       DateTime?
 }
 
 // Storefront finder counters, one row per chart and shop-local day. Incremented at write time.
@@ -88,4 +92,20 @@ model EventSizeDaily {
   count    Int    @default(0)
 
   @@id([shop, chartKey, date, size])
+}
+
+// A named lock with an expiry, so one process at a time runs a background job.
+model JobLease {
+  name        String   @id
+  holder      String
+  lockedUntil DateTime
+}
+
+// Storefront event counts per shop and 10-second window, for the rate limit (pruned daily).
+model EventRate {
+  shop   String
+  window Int // epoch milliseconds / RATE_WINDOW_MS
+  count  Int    @default(0)
+
+  @@id([shop, window])
 }
