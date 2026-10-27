@@ -120,7 +120,18 @@ Run 2026-10-28 on `ui-testing-em0ppgsc.myshopify.com/products/tsc-test-tee` (the
 
 There were two page-level findings outside the app: `frame-title` (serious) on an untitled iframe and `region` (moderate). Neither was inside the finder, so the theme or the store's other scripts own them.
 
-**Keyboard pass:** not run yet. It should cover Tab order, the sliders with the arrow keys and PageUp/PageDown, ESC to close, focus returning to the button, and reduced motion.
+**Keyboard pass: ✅.** It ran with real key events sent over the Chrome DevTools protocol to the same page, starting with cleared `localStorage`, and read the focused element through the shadow root after every key:
+
+| Check | Result |
+|---|---|
+| Reach the trigger | "Find my size" after 14 Tabs from the top of the page, with a visible 1.6px focus ring |
+| Open | Enter opens the finder and focus moves to its first control (Close) |
+| Tab order, step 1 | Close → Find my size tab → Female → Male → cm → ft/in → Height slider → kg → lbs → Weight slider → Continue, then back to Close. Every stop shows the focus ring. The −/+ steppers stay out of the tab order by design, because the slider takes the arrow keys |
+| Focus trap | Tab and Shift+Tab both stay inside the finder (16 stops forward, 6 back) |
+| Slider keys (Height) | ArrowRight/ArrowUp +1, ArrowLeft/ArrowDown −1, PageUp +10, PageDown −10, Home to the minimum, End to the maximum. `aria-valuenow` follows each key |
+| Tabs | ArrowRight moves to "Size chart" and ArrowLeft back to "Find my size", activating each |
+| Escape | Closes the finder, and focus returns to the "Find my size" button |
+| Reduced motion | With `prefers-reduced-motion: reduce` emulated, no element in the finder animates or transitions (6 do without it), and the fit-match count-up shows its final value (90%) at once instead of counting (89% mid-count without it) |
 
 ## Resources
 
