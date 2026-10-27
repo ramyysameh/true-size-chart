@@ -13,7 +13,7 @@ scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_ap
 # `table` holds the engine's ChartTable JSON: { sizes: string[], measurements: { chest?: (number|null)[], ... } }.
 [metaobjects.app.size_chart]
 name = "Size chart"
-description = "A True: Size Chart size chart"
+description = "A size chart for True: Size Chart"
 display_name_field = "name"
 
   [metaobjects.app.size_chart.access]
@@ -72,7 +72,7 @@ type = "multi_line_text_field"
 [product.metafields.app.size_chart]
 type = "metaobject_reference<$app:size_chart>"
 name = "Size chart"
-description = "The True: Size Chart chart shown on this product"
+description = "The True: Size Chart size chart shown on this product"
 
   [product.metafields.app.size_chart.access]
   admin = "merchant_read"
