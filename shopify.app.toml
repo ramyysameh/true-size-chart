@@ -106,5 +106,4 @@ subpath = "tsc"
 redirect_urls = [ "https://true-size-chart.vercel.app/auth/callback" ]
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
