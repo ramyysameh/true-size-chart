@@ -95,10 +95,32 @@ These groups weren't evaluated because they don't appear to apply to this codeba
 
 ## Storefront performance and accessibility on production (Task 13 Step 3)
 
-Pending the production deploy on Vercel:
-- Lighthouse delta: `scripts/perf/lighthouse.mjs`, with the off and on medians recorded here. Target ≤ 3.
-- axe-core 4.10.2 on each finder step and on the size chart tab. Target: no serious or critical violations.
-- Keyboard pass: Tab order, sliders with the arrow keys and PageUp/PageDown, ESC to close, focus returning to the button, reduced motion.
+Run 2026-10-28 on `ui-testing-em0ppgsc.myshopify.com/products/tsc-test-tee` (theme "test-data", published) with the app served from `https://true-size-chart.vercel.app`, extension version `true-size-chart-4`.
+
+**Lighthouse delta: ✅ 2 points (budget 3).** `scripts/perf/lighthouse.mjs`, Lighthouse 12.8.2, mobile, performance only, 5 runs each. It ran with `--port` against a separate Chrome where the store was unlocked.
+
+| State | Runs | Median |
+|---|---|---|
+| Off (app embed off, "Find my size" block hidden) | 74, 70, 73, 65, 76 | 73 |
+| On (both enabled) | 73, 70, 79, 69, 71 | 71 |
+
+`--compare off on` exited 0. A check audit confirmed the final URL was the product page, not `/password`. Before the "off" runs, the page had no trace of the app (`true-size-chart` appeared 0 times in the HTML); before the "on" runs and after the restore, the button was present. No finder assets download on page load: the bundle loads only when a shopper opens the finder. Run-to-run spread is about ±5 points on this dev store, larger than the delta itself.
+
+**axe-core 4.10.2: ✅ no violations.** axe ran on the whole document with the finder open and visible, and only the nodes inside the `true-size-finder` shadow root were kept:
+
+| Finder state | Rules that checked finder nodes | Finder nodes checked | Violations | Incomplete |
+|---|---|---|---|---|
+| Result (remembered from an earlier visit) | 22 | 197 | 0 | 0 |
+| Step 1, height and weight | 22 | 239 | 0 | 0 |
+| Step 2, shape | 22 | 282 | 0 | 0 |
+| Step 3, fit | 21 | 172 | 0 | 0 |
+| Result (fresh) | 23 | 203 | 0 | 0 |
+| Size chart tab, cm | 27 | 158 | 0 | 0 |
+| Size chart tab, in | 27 | 158 | 0 | 0 |
+
+There were two page-level findings outside the app: `frame-title` (serious) on an untitled iframe and `region` (moderate). Neither was inside the finder, so the theme or the store's other scripts own them.
+
+**Keyboard pass:** not run yet. It should cover Tab order, the sliders with the arrow keys and PageUp/PageDown, ESC to close, focus returning to the button, and reduced motion.
 
 ## Resources
 
