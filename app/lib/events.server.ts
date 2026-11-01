@@ -6,6 +6,12 @@ export type EventDb = Pick<PrismaClient, 'eventDaily' | 'eventSizeDaily'>;
 /** Distinct size rows kept per chart and day; later new sizes are dropped (flood guard). */
 export const MAX_SIZES_PER_DAY = 30;
 
+/**
+ * Distinct chart keys kept per shop and day; later new keys are dropped (flood guard).
+ * Any storefront visitor can post a made-up key, and each new key is a new row.
+ */
+export const MAX_CHARTS_PER_DAY = 250;
+
 type Counter = 'opens' | 'completions' | 'addToCarts';
 const COUNTER: Record<ParsedEvent['e'], Counter> = { open: 'opens', complete: 'completions', atc: 'addToCarts' };
 
@@ -29,6 +35,10 @@ export async function recordEvent(db: EventDb, shop: string, ev: ParsedEvent, da
   const day = { shop, chartKey: ev.c, date };
   const field = COUNTER[ev.e];
   const inc = { [field]: { increment: 1 } };
+
+  // Soft cap: two concurrent first events for new keys may both pass the count.
+  const seen = await db.eventDaily.findUnique({ where: { shop_chartKey_date: day }, select: { shop: true } });
+  if (!seen && (await db.eventDaily.count({ where: { shop, date } })) >= MAX_CHARTS_PER_DAY) return;
 
   await withCreateRace(
     () =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_SIZES_PER_DAY, recordEvent, type EventDb } from './events.server';
+import { MAX_CHARTS_PER_DAY, MAX_SIZES_PER_DAY, recordEvent, type EventDb } from './events.server';
 
 type Day = { shop: string; chartKey: string; date: string; opens: number; completions: number; addToCarts: number };
 type SizeRow = { shop: string; chartKey: string; date: string; size: string; count: number };
@@ -37,6 +37,13 @@ function fakeDb(opts: { failDayUpsertOnce?: boolean; failSizeUpsertOnce?: boolea
         const row = days.get(dayKey(args.where.shop_chartKey_date));
         if (!row) throw new Error('not found');
         apply(row, args.data);
+      },
+      async findUnique(args: { where: { shop_chartKey_date: Day } }) {
+        return days.get(dayKey(args.where.shop_chartKey_date)) ?? null;
+      },
+      async count(args: { where: { shop: string; date: string } }) {
+        const { shop, date } = args.where;
+        return [...days.values()].filter((d) => d.shop === shop && d.date === date).length;
       },
     },
     eventSizeDaily: {
@@ -140,5 +147,42 @@ describe('recordEvent', () => {
     await recordEvent(db, SHOP, { e: 'complete', c: 'tee', s: 'S0' }, '2026-10-25');
     expect(sizes.has(`${SHOP}|pants|${DATE}|S0`)).toBe(true);
     expect(sizes.has(`${SHOP}|tee|2026-10-25|S0`)).toBe(true);
+  });
+});
+
+describe('recordEvent chart-key flood guard', () => {
+  const NEXT_DATE = '2026-10-25';
+  const fill = async (db: EventDb) => {
+    for (let i = 0; i < MAX_CHARTS_PER_DAY; i++) await recordEvent(db, SHOP, { e: 'open', c: `k${i}` }, DATE);
+  };
+
+  it('drops an event for a new chart key once MAX_CHARTS_PER_DAY keys exist that day', async () => {
+    const { db, days } = fakeDb();
+    await fill(db);
+    await recordEvent(db, SHOP, { e: 'open', c: 'one-too-many' }, DATE);
+    expect(days.size).toBe(MAX_CHARTS_PER_DAY);
+    expect([...days.values()].some((d) => d.chartKey === 'one-too-many')).toBe(false);
+  });
+
+  it('keeps counting a key already seen today after the cap is reached', async () => {
+    const { db, days } = fakeDb();
+    await fill(db);
+    await recordEvent(db, SHOP, { e: 'complete', c: 'k0', s: 'M' }, DATE);
+    expect(days.get(`${SHOP}|k0|${DATE}`)?.completions).toBe(1);
+  });
+
+  it('counts the chart-key cap per shop and per day', async () => {
+    const { db, days } = fakeDb();
+    await fill(db);
+    await recordEvent(db, 'other.myshopify.com', { e: 'open', c: 'fresh' }, DATE);
+    await recordEvent(db, SHOP, { e: 'open', c: 'fresh' }, NEXT_DATE);
+    expect(days.size).toBe(MAX_CHARTS_PER_DAY + 2);
+  });
+
+  it('drops the size row too when the chart key is over the cap', async () => {
+    const { db, sizes } = fakeDb();
+    await fill(db);
+    await recordEvent(db, SHOP, { e: 'complete', c: 'one-too-many', s: 'M' }, DATE);
+    expect(sizes.size).toBe(0);
   });
 });
