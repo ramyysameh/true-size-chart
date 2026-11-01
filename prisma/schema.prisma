@@ -81,6 +81,7 @@ model EventDaily {
   addToCarts  Int    @default(0)
 
   @@id([shop, chartKey, date])
+  @@index([shop, date]) // the chart-key flood guard counts a shop's rows per day
 }
 
 // Recommended sizes from completions, at most MAX_SIZES_PER_DAY rows per chart and day.

@@ -31,7 +31,6 @@ export function planPageUrl(shopDomain: string, appHandle: string): string {
 
 /** The app's handle in its Shopify admin URLs. */
 export function appHandle(): string {
-  // eslint-disable-next-line no-undef
   return process.env.SHOPIFY_APP_HANDLE ?? 'true-size-chart';
 }
 
