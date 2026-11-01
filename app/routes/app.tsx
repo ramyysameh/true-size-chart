@@ -10,7 +10,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const fresh = new URL(request.url).searchParams.has("plan_handle");
   await authenticatePro(request, { fresh });
 
-  // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 

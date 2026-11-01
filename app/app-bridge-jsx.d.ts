@@ -4,7 +4,7 @@ import "react";
 
 declare module "react" {
   namespace JSX {
-    // eslint-disable-next-line @typescript-eslint/no-empty-interface
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface IntrinsicElements extends globalThis.JSX.IntrinsicElements {}
   }
 }

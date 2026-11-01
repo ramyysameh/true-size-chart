@@ -249,7 +249,6 @@ export async function refreshShopIfDue(
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __tscRefresher: boolean | undefined;
 }
 

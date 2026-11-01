@@ -36,7 +36,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     step,
     handles: flowCharts.flatMap((c) => (c.handle ? [c.handle] : [])),
     shop: session.shop,
-    apiKey: process.env.SHOPIFY_API_KEY || "", // eslint-disable-line no-undef
+    apiKey: process.env.SHOPIFY_API_KEY || "",
     templateGroups: CATEGORIES.map((category) => ({
       category,
       templates: TEMPLATES.filter((t) => t.category === category).map((t) => ({
